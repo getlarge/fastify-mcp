@@ -9,6 +9,7 @@ import type {
   Implementation,
   Tool,
   Resource,
+  ResourceTemplate,
   Prompt,
   ElicitRequest,
   RequestId
@@ -107,6 +108,14 @@ declare module 'fastify' {
       requestedSchema: ElicitRequest['params']['requestedSchema'],
       requestId?: RequestId
     ) => Promise<boolean>
+
+    // Custom resource handler setters
+    mcpSetResourcesListHandler(handler: ResourcesListHandler): void
+    mcpSetResourcesReadHandler(handler: ResourcesReadHandler): void
+    mcpSetResourcesTemplatesListHandler(handler: ResourcesTemplatesListHandler): void
+
+    // Resource subscription accessor
+    mcpGetResourceSubscriptions(): Map<string, Set<string>>
   }
 }
 
@@ -114,6 +123,56 @@ declare module 'fastify' {
 export type UnsafeToolHandler = (params: any, context: HandlerContext) => Promise<CallToolResult> | CallToolResult
 export type UnsafeResourceHandler = (uri: string, context: HandlerContext) => Promise<ReadResourceResult> | ReadResourceResult
 export type UnsafePromptHandler = (name: string, args: any, context: HandlerContext) => Promise<GetPromptResult> | GetPromptResult
+
+/**
+ * Parameters for resources/list request.
+ */
+export interface ResourcesListParams {
+  cursor?: string
+}
+
+/**
+ * Result for resources/list response.
+ */
+export interface ResourcesListResult {
+  resources: Resource[]
+  nextCursor?: string
+}
+
+/**
+ * Result for resources/templates/list response.
+ */
+export interface ResourcesTemplatesListResult {
+  resourceTemplates: ResourceTemplate[]
+  nextCursor?: string
+}
+
+/**
+ * Custom handler for resources/list.
+ * Return null/undefined to fall back to default behavior.
+ */
+export type ResourcesListHandler = (
+  params: ResourcesListParams,
+  context: HandlerContext
+) => Promise<ResourcesListResult | null | undefined> | ResourcesListResult | null | undefined
+
+/**
+ * Custom handler for resources/read.
+ * Return null/undefined to fall back to pattern matching + registered handlers.
+ */
+export type ResourcesReadHandler = (
+  uri: string,
+  context: HandlerContext
+) => Promise<ReadResourceResult | null | undefined> | ReadResourceResult | null | undefined
+
+/**
+ * Custom handler for resources/templates/list.
+ * Return null/undefined to fall back to default behavior.
+ */
+export type ResourcesTemplatesListHandler = (
+  params: ResourcesListParams,
+  context: HandlerContext
+) => Promise<ResourcesTemplatesListResult | null | undefined> | ResourcesTemplatesListResult | null | undefined
 
 // Unsafe interfaces for backward compatibility
 export interface UnsafeMCPTool {

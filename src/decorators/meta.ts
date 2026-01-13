@@ -3,9 +3,18 @@ import fp from 'fastify-plugin'
 import type {
   MCPTool,
   MCPResource,
-  MCPPrompt
+  MCPPrompt,
+  ResourcesListHandler,
+  ResourcesReadHandler,
+  ResourcesTemplatesListHandler
 } from '../types.ts'
 import { schemaToArguments, validateToolSchema } from '../validation/index.ts'
+import {
+  setResourcesListHandler,
+  setResourcesReadHandler,
+  setResourcesTemplatesListHandler,
+  getResourceSubscriptions
+} from '../handlers.ts'
 
 interface MCPDecoratorsOptions {
   tools: Map<string, MCPTool>
@@ -92,6 +101,27 @@ const mcpDecoratorsPlugin: FastifyPluginAsync<MCPDecoratorsOptions> = async (app
       },
       handler
     })
+  })
+
+  // Custom resource handler setters
+  app.decorate('mcpSetResourcesListHandler', (handler: ResourcesListHandler) => {
+    setResourcesListHandler(handler)
+    app.log.debug('Custom resources list handler registered')
+  })
+
+  app.decorate('mcpSetResourcesReadHandler', (handler: ResourcesReadHandler) => {
+    setResourcesReadHandler(handler)
+    app.log.debug('Custom resources read handler registered')
+  })
+
+  app.decorate('mcpSetResourcesTemplatesListHandler', (handler: ResourcesTemplatesListHandler) => {
+    setResourcesTemplatesListHandler(handler)
+    app.log.debug('Custom resources templates list handler registered')
+  })
+
+  // Export subscription store for notification logic
+  app.decorate('mcpGetResourceSubscriptions', () => {
+    return getResourceSubscriptions()
   })
 }
 

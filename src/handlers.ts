@@ -23,10 +23,81 @@ import {
   INVALID_PARAMS
 } from './schema.ts'
 
-import type { MCPTool, MCPResource, MCPPrompt, MCPPluginOptions } from './types.ts'
+import type {
+  MCPTool,
+  MCPResource,
+  MCPPrompt,
+  MCPPluginOptions,
+  ResourcesListHandler,
+  ResourcesReadHandler,
+  ResourcesTemplatesListHandler
+} from './types.ts'
 import type { AuthorizationContext } from './types/auth-types.ts'
 import { validate, CallToolRequestSchema, ReadResourceRequestSchema, GetPromptRequestSchema, isTypeBoxSchema } from './validation/index.ts'
 import { sanitizeToolParams, assessToolSecurity, SECURITY_WARNINGS } from './security.ts'
+
+// Custom handler storage for resource operations
+let customResourcesListHandler: ResourcesListHandler | null = null
+let customResourcesReadHandler: ResourcesReadHandler | null = null
+let customResourcesTemplatesListHandler: ResourcesTemplatesListHandler | null = null
+
+// Setter functions for custom handlers (called from decorators)
+export function setResourcesListHandler (handler: ResourcesListHandler): void {
+  customResourcesListHandler = handler
+}
+
+export function setResourcesReadHandler (handler: ResourcesReadHandler): void {
+  customResourcesReadHandler = handler
+}
+
+export function setResourcesTemplatesListHandler (handler: ResourcesTemplatesListHandler): void {
+  customResourcesTemplatesListHandler = handler
+}
+
+// Reset all custom handlers (useful for testing)
+export function resetCustomResourceHandlers (): void {
+  customResourcesListHandler = null
+  customResourcesReadHandler = null
+  customResourcesTemplatesListHandler = null
+}
+
+// Subscription store: sessionId -> Set<uri>
+const resourceSubscriptions = new Map<string, Set<string>>()
+
+export function getResourceSubscriptions (): Map<string, Set<string>> {
+  return resourceSubscriptions
+}
+
+/**
+ * Convert URI pattern with {param} placeholders to regex.
+ * Example: "aip://findings/{reviewId}" -> /^aip:\/\/findings\/([^/]+)$/
+ */
+function uriPatternToRegex (pattern: string): RegExp {
+  const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const withParams = escaped.replace(/\\{([^}]+)\\}/g, '([^/]+)')
+  return new RegExp(`^${withParams}$`)
+}
+
+/**
+ * Find resource by URI with pattern matching support.
+ * Tries exact match first, then pattern matching for dynamic URIs.
+ */
+function findResourceByUri (
+  resources: Map<string, MCPResource>,
+  uri: string
+): MCPResource | undefined {
+  // Try exact match first
+  const exact = resources.get(uri)
+  if (exact) return exact
+
+  // Try pattern matching for dynamic URIs (patterns contain {param})
+  for (const [pattern, resource] of resources) {
+    if (pattern.includes('{') && uriPatternToRegex(pattern).test(uri)) {
+      return resource
+    }
+  }
+  return undefined
+}
 
 type HandlerDependencies = {
   app: FastifyInstance
@@ -92,13 +163,121 @@ function handleToolsList (request: JSONRPCRequest, dependencies: HandlerDependen
   return createResponse(request.id, result)
 }
 
-function handleResourcesList (request: JSONRPCRequest, dependencies: HandlerDependencies): JSONRPCResponse {
-  const { resources } = dependencies
+async function handleResourcesList (
+  request: JSONRPCRequest,
+  sessionId: string | undefined,
+  dependencies: HandlerDependencies
+): Promise<JSONRPCResponse> {
+  const { resources, request: fastifyRequest, reply, authContext, app } = dependencies
+
+  // Try custom handler first
+  if (customResourcesListHandler) {
+    try {
+      const params = (request.params || {}) as { cursor?: string }
+      const result = await customResourcesListHandler(
+        { cursor: params.cursor },
+        { sessionId, request: fastifyRequest, reply, authContext }
+      )
+      if (result) {
+        return createResponse(request.id, result)
+      }
+    } catch (error) {
+      app.log.error({ error: (error as Error).message }, 'Custom resources list handler failed')
+    }
+  }
+
+  // Default behavior
   const result: ListResourcesResult = {
     resources: Array.from(resources.values()).map(r => r.definition),
     nextCursor: undefined
   }
   return createResponse(request.id, result)
+}
+
+async function handleResourceTemplatesList (
+  request: JSONRPCRequest,
+  sessionId: string | undefined,
+  dependencies: HandlerDependencies
+): Promise<JSONRPCResponse> {
+  const { resources, request: fastifyRequest, reply, authContext, app } = dependencies
+
+  // Try custom handler first
+  if (customResourcesTemplatesListHandler) {
+    try {
+      const params = (request.params || {}) as { cursor?: string }
+      const result = await customResourcesTemplatesListHandler(
+        { cursor: params.cursor },
+        { sessionId, request: fastifyRequest, reply, authContext }
+      )
+      if (result) {
+        return createResponse(request.id, result)
+      }
+    } catch (error) {
+      app.log.error({ error: (error as Error).message }, 'Custom templates list handler failed')
+    }
+  }
+
+  // Default: extract templates from registered resources with {param} patterns
+  const resourceTemplates = Array.from(resources.values())
+    .filter(r => r.definition.uri && r.definition.uri.includes('{'))
+    .map(r => ({
+      uriTemplate: r.definition.uri,
+      name: r.definition.name,
+      description: r.definition.description,
+      mimeType: r.definition.mimeType
+    }))
+
+  return createResponse(request.id, { resourceTemplates })
+}
+
+async function handleResourcesSubscribe (
+  request: JSONRPCRequest,
+  sessionId: string | undefined,
+  dependencies: HandlerDependencies
+): Promise<JSONRPCResponse | JSONRPCError> {
+  const { app } = dependencies
+  const params = request.params as { uri?: string } | undefined
+
+  if (!params?.uri) {
+    return createError(request.id, INVALID_PARAMS, 'Missing uri parameter')
+  }
+  if (!sessionId) {
+    return createError(request.id, INVALID_PARAMS, 'Session ID required for subscriptions')
+  }
+
+  const uri = params.uri
+  if (!resourceSubscriptions.has(sessionId)) {
+    resourceSubscriptions.set(sessionId, new Set())
+  }
+  resourceSubscriptions.get(sessionId)!.add(uri)
+
+  app.log.info({ sessionId, uri }, 'Resource subscription added')
+  return createResponse(request.id, {})
+}
+
+async function handleResourcesUnsubscribe (
+  request: JSONRPCRequest,
+  sessionId: string | undefined,
+  dependencies: HandlerDependencies
+): Promise<JSONRPCResponse | JSONRPCError> {
+  const { app } = dependencies
+  const params = request.params as { uri?: string } | undefined
+
+  if (!params?.uri) {
+    return createError(request.id, INVALID_PARAMS, 'Missing uri parameter')
+  }
+
+  const uri = params.uri
+  const sessionSubs = resourceSubscriptions.get(sessionId || '')
+  if (sessionSubs) {
+    sessionSubs.delete(uri)
+    if (sessionSubs.size === 0) {
+      resourceSubscriptions.delete(sessionId || '')
+    }
+  }
+
+  app.log.info({ sessionId, uri }, 'Resource subscription removed')
+  return createResponse(request.id, {})
 }
 
 function handlePromptsList (request: JSONRPCRequest, dependencies: HandlerDependencies): JSONRPCResponse {
@@ -246,7 +425,7 @@ async function handleResourcesRead (
   sessionId: string | undefined,
   dependencies: HandlerDependencies
 ): Promise<JSONRPCResponse | JSONRPCError> {
-  const { resources } = dependencies
+  const { resources, request: fastifyRequest, reply, authContext, app } = dependencies
 
   // Validate the request parameters structure
   const paramsValidation = validate(ReadResourceRequestSchema, request.params)
@@ -259,7 +438,23 @@ async function handleResourcesRead (
   const params = paramsValidation.data
   const uri = params.uri
 
-  const resource = resources.get(uri)
+  // Try custom handler first (complete override capability)
+  if (customResourcesReadHandler) {
+    try {
+      const result = await customResourcesReadHandler(
+        uri,
+        { sessionId, request: fastifyRequest, reply, authContext }
+      )
+      if (result) {
+        return createResponse(request.id, result)
+      }
+    } catch (error) {
+      app.log.error({ error: (error as Error).message, uri }, 'Custom resources read handler failed')
+    }
+  }
+
+  // Find resource via pattern matching (includes exact match)
+  const resource = findResourceByUri(resources, uri)
   if (!resource) {
     return createError(request.id, METHOD_NOT_FOUND, `Resource '${uri}' not found`)
   }
@@ -297,9 +492,9 @@ async function handleResourcesRead (
   try {
     const result = await resource.handler(uri, {
       sessionId,
-      request: dependencies.request,
-      reply: dependencies.reply,
-      authContext: dependencies.authContext
+      request: fastifyRequest,
+      reply,
+      authContext
     })
     return createResponse(request.id, result)
   } catch (error: any) {
@@ -462,7 +657,13 @@ export async function handleRequest (
       case 'tools/list':
         return handleToolsList(request, dependencies)
       case 'resources/list':
-        return handleResourcesList(request, dependencies)
+        return await handleResourcesList(request, sessionId, dependencies)
+      case 'resources/templates/list':
+        return await handleResourceTemplatesList(request, sessionId, dependencies)
+      case 'resources/subscribe':
+        return await handleResourcesSubscribe(request, sessionId, dependencies)
+      case 'resources/unsubscribe':
+        return await handleResourcesUnsubscribe(request, sessionId, dependencies)
       case 'prompts/list':
         return handlePromptsList(request, dependencies)
       case 'tools/call':
