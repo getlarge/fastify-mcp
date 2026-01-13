@@ -16,6 +16,7 @@ import { TokenValidator } from './auth/token-validator.ts'
 import { createAuthPreHandler } from './auth/prehandler.ts'
 import oauthClientPlugin from './auth/oauth-client.ts'
 import authRoutesPlugin from './routes/auth-routes.ts'
+import { createCustomResourceHandlers } from './handlers.ts'
 
 // Import and export MCP protocol types
 import type {
@@ -70,6 +71,9 @@ const mcpPlugin = fp(async function (app: FastifyInstance, opts: MCPPluginOption
   // Local stream management per server instance
   const localStreams = new Map<string, Set<any>>()
 
+  // Create custom resource handlers container
+  const customResourceHandlers = createCustomResourceHandlers()
+
   // Initialize authorization components if enabled
   let tokenValidator: TokenValidator | null = null
   if (opts.authorization?.enabled) {
@@ -98,7 +102,9 @@ const mcpPlugin = fp(async function (app: FastifyInstance, opts: MCPPluginOption
   app.register(metaDecorators, {
     tools,
     resources,
-    prompts
+    prompts,
+    customResourceHandlers,
+    sessionStore
   })
   app.register(pubsubDecorators, {
     enableSSE,
@@ -118,7 +124,8 @@ const mcpPlugin = fp(async function (app: FastifyInstance, opts: MCPPluginOption
     prompts,
     sessionStore,
     messageBroker,
-    localStreams
+    localStreams,
+    customResourceHandlers
   })
 
   // Add close hook to clean up Redis connections and authorization components

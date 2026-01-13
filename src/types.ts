@@ -114,8 +114,8 @@ declare module 'fastify' {
     mcpSetResourcesReadHandler(handler: ResourcesReadHandler): void
     mcpSetResourcesTemplatesListHandler(handler: ResourcesTemplatesListHandler): void
 
-    // Resource subscription accessor
-    mcpGetResourceSubscriptions(): Map<string, Set<string>>
+    // Resource subscription accessor (async to support Redis backend)
+    mcpGetResourceSubscriptions(): Promise<Map<string, Set<string>>>
   }
 }
 

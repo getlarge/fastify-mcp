@@ -7,6 +7,7 @@ import type { MCPPluginOptions, MCPTool, MCPResource, MCPPrompt } from '../types
 import type { SessionStore, SessionMetadata } from '../stores/session-store.ts'
 import type { MessageBroker } from '../brokers/message-broker.ts'
 import type { AuthorizationContext } from '../types/auth-types.ts'
+import type { CustomResourceHandlers } from '../handlers.ts'
 import { processMessage } from '../handlers.ts'
 
 interface MCPPubSubRoutesOptions {
@@ -20,10 +21,11 @@ interface MCPPubSubRoutesOptions {
   sessionStore: SessionStore
   messageBroker: MessageBroker
   localStreams: Map<string, Set<any>>
+  customResourceHandlers: CustomResourceHandlers
 }
 
 const mcpPubSubRoutesPlugin: FastifyPluginAsync<MCPPubSubRoutesOptions> = async (app, options) => {
-  const { enableSSE, opts, capabilities, serverInfo, tools, resources, prompts, sessionStore, messageBroker, localStreams } = options
+  const { enableSSE, opts, capabilities, serverInfo, tools, resources, prompts, sessionStore, messageBroker, localStreams, customResourceHandlers } = options
 
   async function createSSESession (): Promise<SessionMetadata> {
     const sessionId = randomUUID()
@@ -187,7 +189,9 @@ const mcpPubSubRoutesPlugin: FastifyPluginAsync<MCPPubSubRoutesOptions> = async 
         prompts,
         request,
         reply,
-        authContext
+        authContext,
+        sessionStore,
+        customResourceHandlers
       })
       if (response) {
         return response

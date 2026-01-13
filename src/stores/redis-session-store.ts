@@ -91,6 +91,7 @@ export class RedisSessionStore implements SessionStore {
   async delete (sessionId: string): Promise<void> {
     const sessionKey = `session:${sessionId}`
     const historyKey = `session:${sessionId}:history`
+    const subscriptionsKey = `session:${sessionId}:subscriptions`
 
     // Get session to clean up token mappings
     const session = await this.get(sessionId)
@@ -98,7 +99,14 @@ export class RedisSessionStore implements SessionStore {
       await this.removeTokenMapping(session.authorization.tokenHash)
     }
 
-    await this.redis.del(sessionKey, historyKey)
+    // Clean up resource subscription reverse index
+    const subscriptions = await this.redis.smembers(subscriptionsKey)
+    const pipeline = this.redis.pipeline()
+    for (const uri of subscriptions) {
+      pipeline.srem(`resource:${uri}:subscribers`, sessionId)
+    }
+    pipeline.del(sessionKey, historyKey, subscriptionsKey)
+    await pipeline.exec()
   }
 
   async cleanup (): Promise<void> {
@@ -215,5 +223,64 @@ export class RedisSessionStore implements SessionStore {
     if (authorization.tokenHash) {
       await this.addTokenMapping(authorization.tokenHash, sessionId)
     }
+  }
+
+  // Resource subscription operations
+  async addResourceSubscription (sessionId: string, uri: string): Promise<void> {
+    const subscriptionsKey = `session:${sessionId}:subscriptions`
+    const subscribersKey = `resource:${uri}:subscribers`
+
+    const pipeline = this.redis.pipeline()
+    // Add uri to session's subscriptions
+    pipeline.sadd(subscriptionsKey, uri)
+    // Add session to resource's subscribers (reverse index)
+    pipeline.sadd(subscribersKey, sessionId)
+    // Set expiration on both keys (1 hour, matches session TTL)
+    pipeline.expire(subscriptionsKey, 3600)
+    pipeline.expire(subscribersKey, 3600)
+    await pipeline.exec()
+  }
+
+  async removeResourceSubscription (sessionId: string, uri: string): Promise<void> {
+    const subscriptionsKey = `session:${sessionId}:subscriptions`
+    const subscribersKey = `resource:${uri}:subscribers`
+
+    const pipeline = this.redis.pipeline()
+    // Remove uri from session's subscriptions
+    pipeline.srem(subscriptionsKey, uri)
+    // Remove session from resource's subscribers
+    pipeline.srem(subscribersKey, sessionId)
+    await pipeline.exec()
+  }
+
+  async getResourceSubscriptions (sessionId: string): Promise<Set<string>> {
+    const subscriptionsKey = `session:${sessionId}:subscriptions`
+    const members = await this.redis.smembers(subscriptionsKey)
+    return new Set(members)
+  }
+
+  async getSubscribersForResource (uri: string): Promise<string[]> {
+    const subscribersKey = `resource:${uri}:subscribers`
+    return this.redis.smembers(subscribersKey)
+  }
+
+  async getAllResourceSubscriptions (): Promise<Map<string, Set<string>>> {
+    const result = new Map<string, Set<string>>()
+
+    // Scan for all session subscription keys
+    let cursor = '0'
+    do {
+      const [nextCursor, keys] = await this.redis.scan(cursor, 'MATCH', 'session:*:subscriptions', 'COUNT', 100)
+      cursor = nextCursor
+      for (const key of keys) {
+        const sessionId = key.split(':')[1]
+        const members = await this.redis.smembers(key)
+        if (members.length > 0) {
+          result.set(sessionId, new Set(members))
+        }
+      }
+    } while (cursor !== '0')
+
+    return result
   }
 }

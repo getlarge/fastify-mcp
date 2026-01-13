@@ -29,4 +29,11 @@ export interface SessionStore {
   addTokenMapping(tokenHash: string, sessionId: string): Promise<void>
   removeTokenMapping(tokenHash: string): Promise<void>
   updateAuthorization(sessionId: string, authorization: AuthorizationContext, tokenRefresh?: TokenRefreshInfo): Promise<void>
+
+  // Resource subscription operations
+  addResourceSubscription(sessionId: string, uri: string): Promise<void>
+  removeResourceSubscription(sessionId: string, uri: string): Promise<void>
+  getResourceSubscriptions(sessionId: string): Promise<Set<string>>
+  getSubscribersForResource(uri: string): Promise<string[]>
+  getAllResourceSubscriptions(): Promise<Map<string, Set<string>>>
 }

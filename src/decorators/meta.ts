@@ -8,22 +8,20 @@ import type {
   ResourcesReadHandler,
   ResourcesTemplatesListHandler
 } from '../types.ts'
+import type { SessionStore } from '../stores/session-store.ts'
+import type { CustomResourceHandlers } from '../handlers.ts'
 import { schemaToArguments, validateToolSchema } from '../validation/index.ts'
-import {
-  setResourcesListHandler,
-  setResourcesReadHandler,
-  setResourcesTemplatesListHandler,
-  getResourceSubscriptions
-} from '../handlers.ts'
 
 interface MCPDecoratorsOptions {
   tools: Map<string, MCPTool>
   resources: Map<string, MCPResource>
   prompts: Map<string, MCPPrompt>
+  customResourceHandlers: CustomResourceHandlers
+  sessionStore: SessionStore
 }
 
 const mcpDecoratorsPlugin: FastifyPluginAsync<MCPDecoratorsOptions> = async (app, options) => {
-  const { tools, resources, prompts } = options
+  const { tools, resources, prompts, customResourceHandlers, sessionStore } = options
 
   // Enhanced tool decorator with TypeBox schema support
   app.decorate('mcpAddTool', (
@@ -105,23 +103,23 @@ const mcpDecoratorsPlugin: FastifyPluginAsync<MCPDecoratorsOptions> = async (app
 
   // Custom resource handler setters
   app.decorate('mcpSetResourcesListHandler', (handler: ResourcesListHandler) => {
-    setResourcesListHandler(handler)
+    customResourceHandlers.resourcesListHandler = handler
     app.log.debug('Custom resources list handler registered')
   })
 
   app.decorate('mcpSetResourcesReadHandler', (handler: ResourcesReadHandler) => {
-    setResourcesReadHandler(handler)
+    customResourceHandlers.resourcesReadHandler = handler
     app.log.debug('Custom resources read handler registered')
   })
 
   app.decorate('mcpSetResourcesTemplatesListHandler', (handler: ResourcesTemplatesListHandler) => {
-    setResourcesTemplatesListHandler(handler)
+    customResourceHandlers.resourcesTemplatesListHandler = handler
     app.log.debug('Custom resources templates list handler registered')
   })
 
-  // Export subscription store for notification logic
-  app.decorate('mcpGetResourceSubscriptions', () => {
-    return getResourceSubscriptions()
+  // Export subscription store accessor for notification logic
+  app.decorate('mcpGetResourceSubscriptions', async () => {
+    return sessionStore.getAllResourceSubscriptions()
   })
 }
 

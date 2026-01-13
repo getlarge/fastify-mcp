@@ -11,6 +11,7 @@ export class MemorySessionStore implements SessionStore {
   private sessions = new Map<string, SessionMetadata>()
   private messageHistory = new Map<string, MessageHistoryEntry[]>()
   private tokenToSession = new Map<string, string>() // tokenHash -> sessionId
+  private resourceSubscriptions = new Map<string, Set<string>>() // sessionId -> Set<uri>
   private maxMessages: number
 
   constructor (maxMessages: number = 100) {
@@ -36,6 +37,7 @@ export class MemorySessionStore implements SessionStore {
 
     this.sessions.delete(sessionId)
     this.messageHistory.delete(sessionId)
+    this.resourceSubscriptions.delete(sessionId)
   }
 
   async cleanup (): Promise<void> {
@@ -124,5 +126,48 @@ export class MemorySessionStore implements SessionStore {
     }
 
     this.sessions.set(sessionId, session)
+  }
+
+  // Resource subscription operations
+  async addResourceSubscription (sessionId: string, uri: string): Promise<void> {
+    let subscriptions = this.resourceSubscriptions.get(sessionId)
+    if (!subscriptions) {
+      subscriptions = new Set()
+      this.resourceSubscriptions.set(sessionId, subscriptions)
+    }
+    subscriptions.add(uri)
+  }
+
+  async removeResourceSubscription (sessionId: string, uri: string): Promise<void> {
+    const subscriptions = this.resourceSubscriptions.get(sessionId)
+    if (subscriptions) {
+      subscriptions.delete(uri)
+      if (subscriptions.size === 0) {
+        this.resourceSubscriptions.delete(sessionId)
+      }
+    }
+  }
+
+  async getResourceSubscriptions (sessionId: string): Promise<Set<string>> {
+    return this.resourceSubscriptions.get(sessionId) || new Set()
+  }
+
+  async getSubscribersForResource (uri: string): Promise<string[]> {
+    const subscribers: string[] = []
+    for (const [sessionId, subscriptions] of this.resourceSubscriptions) {
+      if (subscriptions.has(uri)) {
+        subscribers.push(sessionId)
+      }
+    }
+    return subscribers
+  }
+
+  async getAllResourceSubscriptions (): Promise<Map<string, Set<string>>> {
+    // Return a copy to prevent external mutation
+    const copy = new Map<string, Set<string>>()
+    for (const [sessionId, subscriptions] of this.resourceSubscriptions) {
+      copy.set(sessionId, new Set(subscriptions))
+    }
+    return copy
   }
 }

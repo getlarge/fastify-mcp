@@ -1,4 +1,4 @@
-import { test, describe, beforeEach } from 'node:test'
+import { test, describe } from 'node:test'
 import type { TestContext } from 'node:test'
 import Fastify from 'fastify'
 import mcpPlugin from '../src/index.ts'
@@ -10,14 +10,8 @@ import type {
   ReadResourceResult
 } from '../src/schema.ts'
 import { JSONRPC_VERSION, INVALID_PARAMS } from '../src/schema.ts'
-import { resetCustomResourceHandlers } from '../src/handlers.ts'
 
 describe('Custom Resource Handlers', () => {
-  // Reset custom handlers before each test to ensure isolation
-  beforeEach(() => {
-    resetCustomResourceHandlers()
-  })
-
   describe('mcpSetResourcesListHandler', () => {
     test('should use custom handler for resources/list', async (t: TestContext) => {
       const app = Fastify()
@@ -152,7 +146,7 @@ describe('Custom Resource Handlers', () => {
             }]
           }
         }
-        return null // Fall back to pattern matching
+        return null // Fall back to registered resources
       })
 
       const request: JSONRPCRequest = {
@@ -176,22 +170,22 @@ describe('Custom Resource Handlers', () => {
       t.assert.strictEqual(content.text, 'Custom content for custom://my-resource')
     })
 
-    test('should fall back to pattern matching when custom handler returns null', async (t: TestContext) => {
+    test('should fall back to registered resources when custom handler returns null', async (t: TestContext) => {
       const app = Fastify()
       t.after(() => app.close())
 
       await app.register(mcpPlugin)
       await app.ready()
 
-      // Add a resource with pattern
+      // Add a registered resource
       app.mcpAddResource({
-        uriPattern: 'items://{itemId}',
-        name: 'Item Resource'
+        uri: 'items://123',
+        name: 'Item 123'
       }, async (uri) => {
         return {
           contents: [{
             uri,
-            text: `Pattern matched: ${uri}`,
+            text: `Registered resource: ${uri}`,
             mimeType: 'text/plain'
           }]
         }
@@ -223,32 +217,30 @@ describe('Custom Resource Handlers', () => {
       const result = body.result as ReadResourceResult
       t.assert.strictEqual(result.contents[0].uri, 'items://123')
       const content = result.contents[0] as { text: string }
-      t.assert.strictEqual(content.text, 'Pattern matched: items://123')
+      t.assert.strictEqual(content.text, 'Registered resource: items://123')
     })
-  })
 
-  describe('URI Pattern Matching', () => {
-    test('should match resources with {param} patterns', async (t: TestContext) => {
+    test('should implement pattern matching in custom handler', async (t: TestContext) => {
       const app = Fastify()
       t.after(() => app.close())
 
       await app.register(mcpPlugin)
       await app.ready()
 
-      // Add a resource with pattern
-      app.mcpAddResource({
-        uriPattern: 'users://{userId}/profile',
-        name: 'User Profile'
-      }, async (uri) => {
-        const match = uri.match(/users:\/\/([^/]+)\/profile/)
-        const userId = match ? match[1] : 'unknown'
-        return {
-          contents: [{
-            uri,
-            text: JSON.stringify({ userId, type: 'profile' }),
-            mimeType: 'application/json'
-          }]
+      // Custom handler with pattern matching for users URIs
+      app.mcpSetResourcesReadHandler(async (uri) => {
+        const userMatch = uri.match(/^users:\/\/([^/]+)\/profile$/)
+        if (userMatch) {
+          const userId = userMatch[1]
+          return {
+            contents: [{
+              uri,
+              text: JSON.stringify({ userId, type: 'profile' }),
+              mimeType: 'application/json'
+            }]
+          }
         }
+        return null
       })
 
       const request: JSONRPCRequest = {
@@ -271,102 +263,6 @@ describe('Custom Resource Handlers', () => {
       const content = result.contents[0] as { text: string }
       const data = JSON.parse(content.text)
       t.assert.strictEqual(data.userId, 'user-456')
-    })
-
-    test('should prefer exact match over pattern match', async (t: TestContext) => {
-      const app = Fastify()
-      t.after(() => app.close())
-
-      await app.register(mcpPlugin)
-      await app.ready()
-
-      // Add exact match resource
-      app.mcpAddResource({
-        uri: 'items://special',
-        name: 'Special Item'
-      }, async (uri) => {
-        return {
-          contents: [{
-            uri,
-            text: 'exact match',
-            mimeType: 'text/plain'
-          }]
-        }
-      })
-
-      // Add pattern resource
-      app.mcpAddResource({
-        uriPattern: 'items://{itemId}',
-        name: 'Item'
-      }, async (uri) => {
-        return {
-          contents: [{
-            uri,
-            text: 'pattern match',
-            mimeType: 'text/plain'
-          }]
-        }
-      })
-
-      const request: JSONRPCRequest = {
-        jsonrpc: JSONRPC_VERSION,
-        id: 1,
-        method: 'resources/read',
-        params: { uri: 'items://special' }
-      }
-
-      const response = await app.inject({
-        method: 'POST',
-        url: '/mcp',
-        payload: request
-      })
-
-      t.assert.strictEqual(response.statusCode, 200)
-      const body = response.json() as JSONRPCResponse
-      const result = body.result as ReadResourceResult
-      const content = result.contents[0] as { text: string }
-      t.assert.strictEqual(content.text, 'exact match')
-    })
-
-    test('should match complex URI patterns', async (t: TestContext) => {
-      const app = Fastify()
-      t.after(() => app.close())
-
-      await app.register(mcpPlugin)
-      await app.ready()
-
-      // Add a resource with multiple params
-      app.mcpAddResource({
-        uriPattern: 'api://{version}/resources/{resourceType}/{resourceId}',
-        name: 'API Resource'
-      }, async (uri) => {
-        return {
-          contents: [{
-            uri,
-            text: `Matched: ${uri}`,
-            mimeType: 'text/plain'
-          }]
-        }
-      })
-
-      const request: JSONRPCRequest = {
-        jsonrpc: JSONRPC_VERSION,
-        id: 1,
-        method: 'resources/read',
-        params: { uri: 'api://v1/resources/users/12345' }
-      }
-
-      const response = await app.inject({
-        method: 'POST',
-        url: '/mcp',
-        payload: request
-      })
-
-      t.assert.strictEqual(response.statusCode, 200)
-      const body = response.json() as JSONRPCResponse
-      const result = body.result as ReadResourceResult
-      const content = result.contents[0] as { text: string }
-      t.assert.strictEqual(content.text, 'Matched: api://v1/resources/users/12345')
     })
   })
 
@@ -412,7 +308,7 @@ describe('Custom Resource Handlers', () => {
       await app.register(mcpPlugin)
       await app.ready()
 
-      // Add resources with patterns
+      // Add resources with patterns (uriPattern contains {param})
       app.mcpAddResource({
         uriPattern: 'items://{itemId}',
         name: 'Item',
@@ -448,7 +344,7 @@ describe('Custom Resource Handlers', () => {
       const result = body.result as { resourceTemplates: Array<{ uriTemplate: string, name: string }> }
       t.assert.strictEqual(result.resourceTemplates.length, 2)
 
-      const templates = result.resourceTemplates.map(t => t.uriTemplate).sort()
+      const templates = result.resourceTemplates.map(tmpl => tmpl.uriTemplate).sort()
       t.assert.deepStrictEqual(templates, ['items://{itemId}', 'users://{userId}/settings'])
     })
   })
@@ -531,6 +427,76 @@ describe('Custom Resource Handlers', () => {
       t.assert.strictEqual(body.error.code, INVALID_PARAMS)
       t.assert.ok(body.error.message.includes('Missing uri parameter'))
     })
+
+    test('should subscribe and unsubscribe with valid session', async (t: TestContext) => {
+      const app = Fastify()
+      t.after(() => app.close())
+
+      await app.register(mcpPlugin, { enableSSE: true })
+      await app.ready()
+
+      // First create a session via SSE GET
+      const sseResponse = await app.inject({
+        method: 'GET',
+        url: '/mcp',
+        headers: { accept: 'text/event-stream' },
+        payloadAsStream: true
+      })
+
+      const sessionId = sseResponse.headers['mcp-session-id'] as string
+      t.assert.ok(sessionId, 'Session ID should be returned')
+
+      // Clean up SSE stream
+      sseResponse.stream().destroy()
+
+      // Subscribe to a resource
+      const subscribeRequest: JSONRPCRequest = {
+        jsonrpc: JSONRPC_VERSION,
+        id: 1,
+        method: 'resources/subscribe',
+        params: { uri: 'test://resource' }
+      }
+
+      const subscribeResponse = await app.inject({
+        method: 'POST',
+        url: '/mcp',
+        headers: { 'mcp-session-id': sessionId },
+        payload: subscribeRequest
+      })
+
+      t.assert.strictEqual(subscribeResponse.statusCode, 200)
+      const subscribeBody = subscribeResponse.json() as JSONRPCResponse
+      t.assert.deepStrictEqual(subscribeBody.result, {})
+
+      // Verify subscription exists
+      const subscriptions = await app.mcpGetResourceSubscriptions()
+      t.assert.ok(subscriptions.has(sessionId))
+      t.assert.ok(subscriptions.get(sessionId)?.has('test://resource'))
+
+      // Unsubscribe
+      const unsubscribeRequest: JSONRPCRequest = {
+        jsonrpc: JSONRPC_VERSION,
+        id: 2,
+        method: 'resources/unsubscribe',
+        params: { uri: 'test://resource' }
+      }
+
+      const unsubscribeResponse = await app.inject({
+        method: 'POST',
+        url: '/mcp',
+        headers: { 'mcp-session-id': sessionId },
+        payload: unsubscribeRequest
+      })
+
+      t.assert.strictEqual(unsubscribeResponse.statusCode, 200)
+      const unsubscribeBody = unsubscribeResponse.json() as JSONRPCResponse
+      t.assert.deepStrictEqual(unsubscribeBody.result, {})
+
+      // Verify subscription removed
+      const updatedSubscriptions = await app.mcpGetResourceSubscriptions()
+      const sessionSubs = updatedSubscriptions.get(sessionId)
+      t.assert.ok(!sessionSubs || !sessionSubs.has('test://resource'))
+    })
   })
 
   describe('mcpGetResourceSubscriptions', () => {
@@ -541,7 +507,7 @@ describe('Custom Resource Handlers', () => {
       await app.register(mcpPlugin)
       await app.ready()
 
-      const subscriptions = app.mcpGetResourceSubscriptions()
+      const subscriptions = await app.mcpGetResourceSubscriptions()
       t.assert.ok(subscriptions instanceof Map)
     })
   })
