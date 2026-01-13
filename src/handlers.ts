@@ -413,8 +413,25 @@ async function handleResourcesRead (
     }
   }
 
-  // Look up resource by exact URI match
-  const resource = resources.get(uri)
+  // Look up resource by exact URI match first
+  let resource = resources.get(uri)
+
+  // If not found, try pattern matching using uriSchema
+  if (!resource) {
+    for (const [, res] of resources) {
+      if ('uriSchema' in res.definition && res.definition.uriSchema) {
+        const schema = res.definition.uriSchema
+        if (isTypeBoxSchema(schema)) {
+          const uriValidation = validate(schema, uri)
+          if (uriValidation.success) {
+            resource = res
+            break
+          }
+        }
+      }
+    }
+  }
+
   if (!resource) {
     return createError(request.id, METHOD_NOT_FOUND, `Resource '${uri}' not found`)
   }

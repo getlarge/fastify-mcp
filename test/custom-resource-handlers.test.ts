@@ -264,6 +264,57 @@ describe('Custom Resource Handlers', () => {
       const data = JSON.parse(content.text)
       t.assert.strictEqual(data.userId, 'user-456')
     })
+
+    test('should match resource by uriSchema pattern', async (t: TestContext) => {
+      const app = Fastify()
+      t.after(() => app.close())
+
+      await app.register(mcpPlugin)
+      await app.ready()
+
+      // Import Type for uriSchema
+      const { Type } = await import('@sinclair/typebox')
+
+      // Register one resource with uriSchema pattern that handles many URIs
+      app.mcpAddResource({
+        uri: 'file://read',
+        name: 'Read File',
+        description: 'Read the contents of a file',
+        mimeType: 'text/plain',
+        uriSchema: Type.String({ pattern: '^file://read\\?path=.+' })
+      }, async (uri) => {
+        const url = new URL(uri)
+        const filePath = url.searchParams.get('path')
+        return {
+          contents: [{
+            uri,
+            text: `Content of file: ${filePath}`,
+            mimeType: 'text/plain'
+          }]
+        }
+      })
+
+      // Request with query param - should match via uriSchema pattern
+      const request: JSONRPCRequest = {
+        jsonrpc: JSONRPC_VERSION,
+        id: 1,
+        method: 'resources/read',
+        params: { uri: 'file://read?path=/etc/hosts' }
+      }
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/mcp',
+        payload: request
+      })
+
+      t.assert.strictEqual(response.statusCode, 200)
+      const body = response.json() as JSONRPCResponse
+      const result = body.result as ReadResourceResult
+      t.assert.strictEqual(result.contents[0].uri, 'file://read?path=/etc/hosts')
+      const content = result.contents[0] as { text: string }
+      t.assert.strictEqual(content.text, 'Content of file: /etc/hosts')
+    })
   })
 
   describe('resources/templates/list', () => {
