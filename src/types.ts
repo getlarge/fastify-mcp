@@ -160,7 +160,6 @@ export interface UnsafeMCPPrompt {
  * @see https://open-telemetry.github.io/opentelemetry-js/interfaces/_opentelemetry_api.Tracer.html
  */
 export interface TracerLike {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   startActiveSpan (name: string, options: any, fn: (span: any) => any): any
 }
 
