@@ -5,7 +5,6 @@ import type { Tracer, Span } from '@opentelemetry/api'
 import { SpanStatusCode } from '@opentelemetry/api'
 
 function makeSpan (): Span & {
-  setAttribute: ReturnType<typeof mock.fn>
   setStatus: ReturnType<typeof mock.fn>
   recordException: ReturnType<typeof mock.fn>
   end: ReturnType<typeof mock.fn>
@@ -59,19 +58,24 @@ describe('withSpan', () => {
 })
 
 describe('buildSpanAttributes', () => {
-  it('includes method name', async () => {
-    const attrs = await buildSpanAttributes('tools/call')
-    assert.ok(attrs[MCP_ATTR.METHOD_NAME] === 'tools/call' || attrs['mcp.method.name'] === 'tools/call')
+  it('includes method name', () => {
+    const attrs = buildSpanAttributes('tools/call')
+    assert.equal(attrs[MCP_ATTR.METHOD_NAME], 'tools/call')
   })
 
-  it('includes sessionId when provided', async () => {
-    const attrs = await buildSpanAttributes('tools/call', 'sess-123')
-    assert.ok(attrs[MCP_ATTR.SESSION_ID] === 'sess-123' || attrs['mcp.session.id'] === 'sess-123')
+  it('includes sessionId when provided', () => {
+    const attrs = buildSpanAttributes('tools/call', 'sess-123')
+    assert.equal(attrs[MCP_ATTR.SESSION_ID], 'sess-123')
   })
 
-  it('merges extra attributes', async () => {
-    const attrs = await buildSpanAttributes('tools/call', undefined, { 'mcp.tool.name': 'myTool' })
-    assert.equal(attrs['mcp.tool.name'], 'myTool')
+  it('omits sessionId when not provided', () => {
+    const attrs = buildSpanAttributes('tools/call')
+    assert.equal(attrs[MCP_ATTR.SESSION_ID], undefined)
+  })
+
+  it('merges extra attributes', () => {
+    const attrs = buildSpanAttributes('tools/call', undefined, { [MCP_ATTR.TOOL_NAME]: 'myTool' })
+    assert.equal(attrs[MCP_ATTR.TOOL_NAME], 'myTool')
   })
 })
 
