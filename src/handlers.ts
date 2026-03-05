@@ -153,7 +153,7 @@ async function handleToolsCall (
   if (tracer) {
     const { withSpan, buildSpanAttributes, MCP_ATTR } = await getTelemetry()
     const toolName = (request.params as any)?.name as string | undefined
-    const attrs = await buildSpanAttributes('tools/call', sessionId, toolName ? { [MCP_ATTR.TOOL_NAME]: toolName } : undefined)
+    const attrs = buildSpanAttributes('tools/call', sessionId, toolName ? { [MCP_ATTR.TOOL_NAME]: toolName } : undefined)
     return withSpan(tracer, 'tools/call', attrs, () => handleToolsCallCore(request, sessionId, dependencies))
   }
   return handleToolsCallCore(request, sessionId, dependencies)
@@ -300,7 +300,7 @@ async function handleResourcesRead (
   if (tracer) {
     const { withSpan, buildSpanAttributes, MCP_ATTR } = await getTelemetry()
     const uri = (request.params as any)?.uri as string | undefined
-    const attrs = await buildSpanAttributes('resources/read', sessionId, uri ? { [MCP_ATTR.RESOURCE_URI]: uri } : undefined)
+    const attrs = buildSpanAttributes('resources/read', sessionId, uri ? { [MCP_ATTR.RESOURCE_URI]: uri } : undefined)
     return withSpan(tracer, 'resources/read', attrs, () => handleResourcesReadCore(request, sessionId, dependencies))
   }
   return handleResourcesReadCore(request, sessionId, dependencies)
@@ -400,7 +400,7 @@ async function handlePromptsGet (
 
   if (tracer) {
     const { withSpan, buildSpanAttributes } = await getTelemetry()
-    const attrs = await buildSpanAttributes('prompts/get', sessionId)
+    const attrs = buildSpanAttributes('prompts/get', sessionId)
     return withSpan(tracer, 'prompts/get', attrs, () => handlePromptsGetCore(request, sessionId, dependencies))
   }
   return handlePromptsGetCore(request, sessionId, dependencies)
