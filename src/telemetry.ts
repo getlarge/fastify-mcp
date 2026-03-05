@@ -1,30 +1,19 @@
-import type { Tracer, SpanAttributes, SpanStatusCode as SpanStatusCodeType } from '@opentelemetry/api'
+import type { TracerLike } from './types.ts'
 
-/**
- * MCP semantic convention attribute keys from @opentelemetry/semantic-conventions/incubating.
- * Kept as local constants so call sites don't need to import from semconv directly.
- */
-export const MCP_ATTR = {
-  METHOD_NAME: 'mcp.method.name',
-  SESSION_ID: 'mcp.session.id',
-  PROTOCOL_VERSION: 'mcp.protocol.version',
-  RESOURCE_URI: 'mcp.resource.uri',
-  TOOL_NAME: 'mcp.tool.name',
-  PROMPT_NAME: 'mcp.prompt.name'
-} as const
+export { MCP_ATTR, buildSpanAttributes } from './telemetry-constants.ts'
 
 // SpanStatusCode cached after first withSpan call — not re-imported per invocation
-let _SpanStatusCode: typeof SpanStatusCodeType | undefined
+let _SpanStatusCode: typeof import('@opentelemetry/api').SpanStatusCode | undefined
 
 /**
  * Wraps `fn` in an active OTel span. If no tracer is provided, calls fn directly.
- * @opentelemetry/api is loaded dynamically so it is never required at runtime
+ * `@opentelemetry/api` is loaded dynamically so it is never required at runtime
  * for users who don't configure telemetry.
  */
 export async function withSpan<T> (
-  tracer: Tracer | undefined,
+  tracer: TracerLike | undefined,
   spanName: string,
-  attributes: SpanAttributes,
+  attributes: Record<string, string>,
   fn: () => Promise<T>
 ): Promise<T> {
   if (!tracer) return fn()
@@ -35,7 +24,7 @@ export async function withSpan<T> (
   }
   const SpanStatusCode = _SpanStatusCode
 
-  return tracer.startActiveSpan(spanName, { attributes }, async (span) => {
+  return tracer.startActiveSpan(spanName, { attributes }, async (span: any) => {
     try {
       const result = await fn()
       span.setStatus({ code: SpanStatusCode.OK })
@@ -48,19 +37,4 @@ export async function withSpan<T> (
       span.end()
     }
   })
-}
-
-/**
- * Build span attributes for an MCP operation using semconv keys.
- */
-export function buildSpanAttributes (
-  methodName: string,
-  sessionId?: string,
-  extra?: Record<string, string>
-): SpanAttributes {
-  return {
-    [MCP_ATTR.METHOD_NAME]: methodName,
-    ...(sessionId ? { [MCP_ATTR.SESSION_ID]: sessionId } : {}),
-    ...extra
-  }
 }

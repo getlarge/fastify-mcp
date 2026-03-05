@@ -1,12 +1,11 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import type { MCPPluginOptions } from '../src/types.ts'
-import type { Tracer } from '@opentelemetry/api'
+import type { MCPPluginOptions, TracerLike } from '../src/types.ts'
 
 describe('MCPPluginOptions telemetry', () => {
   it('accepts optional telemetry config', () => {
     const opts: MCPPluginOptions = {
-      telemetry: { tracer: {} as Tracer }
+      telemetry: { tracer: {} as TracerLike }
     }
     assert.ok(opts.telemetry)
   })

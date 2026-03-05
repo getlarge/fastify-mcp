@@ -24,12 +24,11 @@ import {
   INVALID_PARAMS
 } from './schema.ts'
 
-import type { Tracer } from '@opentelemetry/api'
-import type { MCPTool, MCPResource, MCPPrompt, MCPPluginOptions, ResourceHandlers } from './types.ts'
+import type { MCPTool, MCPResource, MCPPrompt, MCPPluginOptions, ResourceHandlers, TracerLike } from './types.ts'
 import type { AuthorizationContext } from './types/auth-types.ts'
 import { validate, CallToolRequestSchema, ReadResourceRequestSchema, GetPromptRequestSchema, isTypeBoxSchema } from './validation/index.ts'
 import { sanitizeToolParams, assessToolSecurity, SECURITY_WARNINGS } from './security.ts'
-import { MCP_ATTR } from './telemetry.ts'
+import { MCP_ATTR } from './telemetry-constants.ts'
 
 // Lazy-loaded telemetry module — only imported when a tracer is configured
 let _telemetry: typeof import('./telemetry.ts') | undefined
@@ -50,7 +49,7 @@ export type HandlerDependencies = {
   request: FastifyRequest
   reply: FastifyReply
   authContext?: AuthorizationContext
-  tracer?: Tracer
+  tracer?: TracerLike
 }
 
 export function createResponse (id: string | number, result: any): JSONRPCResponse {
