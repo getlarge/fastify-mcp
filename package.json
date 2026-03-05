@@ -33,6 +33,7 @@
   },
   "homepage": "https://github.com/getlarge/fastify-mcp#readme",
   "devDependencies": {
+    "@opentelemetry/api": "^1.9.0",
     "@fastify/pre-commit": "^2.2.0",
     "@modelcontextprotocol/inspector": "^0.21.0",
     "@modelcontextprotocol/sdk": "^1.13.3",
@@ -58,7 +59,11 @@
     "safe-stable-stringify": "^2.5.0"
   },
   "peerDependencies": {
+    "@opentelemetry/api": ">=1.0.0",
     "@sinclair/typebox": "^0.34.0"
+  },
+  "peerDependenciesMeta": {
+    "@opentelemetry/api": { "optional": true }
   },
   "files": [
     "dist",
