@@ -86,5 +86,6 @@ describe('MCP_ATTR', () => {
     assert.equal(MCP_ATTR.PROTOCOL_VERSION, 'mcp.protocol.version')
     assert.equal(MCP_ATTR.RESOURCE_URI, 'mcp.resource.uri')
     assert.equal(MCP_ATTR.TOOL_NAME, 'mcp.tool.name')
+    assert.equal(MCP_ATTR.PROMPT_NAME, 'mcp.prompt.name')
   })
 })
