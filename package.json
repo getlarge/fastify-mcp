@@ -1,6 +1,6 @@
 {
   "name": "@getlarge/fastify-mcp",
-  "version": "1.3.0-getlarge.1",
+  "version": "1.3.0-getlarge.2",
   "description": "Scalable Fastify adapter for the Model Context Protocol (MCP) - Fork with OIDC and resource subscription support",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -64,7 +64,9 @@
     "@sinclair/typebox": "^0.34.0"
   },
   "peerDependenciesMeta": {
-    "@opentelemetry/api": { "optional": true }
+    "@opentelemetry/api": {
+      "optional": true
+    }
   },
   "files": [
     "dist",
