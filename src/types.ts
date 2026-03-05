@@ -1,5 +1,4 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import type { Tracer } from '@opentelemetry/api'
 import type {
   JSONRPCMessage,
   JSONRPCNotification,
@@ -153,6 +152,18 @@ export interface UnsafeMCPPrompt {
   handler?: UnsafePromptHandler
 }
 
+/**
+ * Minimal tracer interface compatible with `@opentelemetry/api`'s `Tracer`.
+ * Defined locally so consumers don't need `@opentelemetry/api` installed just
+ * to import this package's types. Any real OTel `Tracer` satisfies this structurally.
+ *
+ * @see https://open-telemetry.github.io/opentelemetry-js/interfaces/_opentelemetry_api.Tracer.html
+ */
+export interface TracerLike {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  startActiveSpan (name: string, options: any, fn: (span: any) => any): any
+}
+
 export interface MCPPluginOptions {
   serverInfo?: Implementation
   capabilities?: ServerCapabilities
@@ -170,10 +181,11 @@ export interface MCPPluginOptions {
   /**
    * Optional OpenTelemetry instrumentation.
    * Provide a Tracer to enable per-operation spans with MCP semantic convention attributes.
-   * @opentelemetry/api must be installed as a peer dependency.
+   * Any `Tracer` from `@opentelemetry/api` satisfies `TracerLike`.
+   * @opentelemetry/api must be installed as a peer dependency when using this option.
    */
   telemetry?: {
-    tracer: Tracer
+    tracer: TracerLike
   }
 }
 
