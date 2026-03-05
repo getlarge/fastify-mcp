@@ -37,6 +37,11 @@ async function getTelemetry () {
   return _telemetry
 }
 
+// Attribute key constants — avoids repeating strings at call sites
+const MCP_ATTR_TOOL_NAME = 'mcp.tool.name'
+const MCP_ATTR_RESOURCE_URI = 'mcp.resource.uri'
+const MCP_ATTR_PROMPT_NAME = 'mcp.prompt.name'
+
 export type HandlerDependencies = {
   app: FastifyInstance
   opts: MCPPluginOptions
@@ -144,22 +149,6 @@ function handlePromptsList (request: JSONRPCRequest, dependencies: HandlerDepend
 }
 
 async function handleToolsCall (
-  request: JSONRPCRequest,
-  sessionId: string | undefined,
-  dependencies: HandlerDependencies
-): Promise<JSONRPCResponse | JSONRPCError> {
-  const { tracer } = dependencies
-
-  if (tracer) {
-    const { withSpan, buildSpanAttributes, MCP_ATTR } = await getTelemetry()
-    const toolName = (request.params as any)?.name as string | undefined
-    const attrs = buildSpanAttributes('tools/call', sessionId, toolName ? { [MCP_ATTR.TOOL_NAME]: toolName } : undefined)
-    return withSpan(tracer, 'tools/call', attrs, () => handleToolsCallCore(request, sessionId, dependencies))
-  }
-  return handleToolsCallCore(request, sessionId, dependencies)
-}
-
-async function handleToolsCallCore (
   request: JSONRPCRequest,
   sessionId: string | undefined,
   dependencies: HandlerDependencies
@@ -295,22 +284,6 @@ async function handleResourcesRead (
   sessionId: string | undefined,
   dependencies: HandlerDependencies
 ): Promise<JSONRPCResponse | JSONRPCError> {
-  const { tracer } = dependencies
-
-  if (tracer) {
-    const { withSpan, buildSpanAttributes, MCP_ATTR } = await getTelemetry()
-    const uri = (request.params as any)?.uri as string | undefined
-    const attrs = buildSpanAttributes('resources/read', sessionId, uri ? { [MCP_ATTR.RESOURCE_URI]: uri } : undefined)
-    return withSpan(tracer, 'resources/read', attrs, () => handleResourcesReadCore(request, sessionId, dependencies))
-  }
-  return handleResourcesReadCore(request, sessionId, dependencies)
-}
-
-async function handleResourcesReadCore (
-  request: JSONRPCRequest,
-  sessionId: string | undefined,
-  dependencies: HandlerDependencies
-): Promise<JSONRPCResponse | JSONRPCError> {
   const { resources } = dependencies
 
   // Validate the request parameters structure
@@ -392,21 +365,6 @@ async function handleResourcesReadCore (
 }
 
 async function handlePromptsGet (
-  request: JSONRPCRequest,
-  sessionId: string | undefined,
-  dependencies: HandlerDependencies
-): Promise<JSONRPCResponse | JSONRPCError> {
-  const { tracer } = dependencies
-
-  if (tracer) {
-    const { withSpan, buildSpanAttributes } = await getTelemetry()
-    const attrs = buildSpanAttributes('prompts/get', sessionId)
-    return withSpan(tracer, 'prompts/get', attrs, () => handlePromptsGetCore(request, sessionId, dependencies))
-  }
-  return handlePromptsGetCore(request, sessionId, dependencies)
-}
-
-async function handlePromptsGetCore (
   request: JSONRPCRequest,
   sessionId: string | undefined,
   dependencies: HandlerDependencies
@@ -605,36 +563,44 @@ export async function handleRequest (
 
   try {
     const { tracer } = dependencies
-    const span = tracer
+
+    // Build method-specific extra span attributes before dispatching
+    const extraAttrs: Record<string, string> = {}
+    const params = request.params as any
+    if (request.method === 'tools/call' && params?.name) extraAttrs[MCP_ATTR_TOOL_NAME] = params.name
+    if (request.method === 'resources/read' && params?.uri) extraAttrs[MCP_ATTR_RESOURCE_URI] = params.uri
+    if (request.method === 'prompts/get' && params?.name) extraAttrs[MCP_ATTR_PROMPT_NAME] = params.name
+
+    const wrap = tracer
       ? async (fn: () => Promise<JSONRPCResponse | JSONRPCError>) => {
         const { withSpan, buildSpanAttributes } = await getTelemetry()
-        return withSpan(tracer, request.method, buildSpanAttributes(request.method, sessionId), fn)
+        return withSpan(tracer, request.method, buildSpanAttributes(request.method, sessionId, extraAttrs), fn)
       }
-      : (fn: () => Promise<JSONRPCResponse | JSONRPCError>) => fn()
+      : async (fn: () => Promise<JSONRPCResponse | JSONRPCError>) => fn()
 
     switch (request.method) {
       case 'initialize':
-        return span(async () => handleInitialize(request, dependencies))
+        return wrap(async () => handleInitialize(request, dependencies))
       case 'ping':
-        return span(async () => handlePing(request))
+        return wrap(async () => handlePing(request))
       case 'tools/list':
-        return span(async () => handleToolsList(request, dependencies))
+        return wrap(async () => handleToolsList(request, dependencies))
       case 'resources/list':
-        return span(async () => handleResourcesList(request, dependencies))
+        return wrap(async () => handleResourcesList(request, dependencies))
       case 'resources/templates/list':
-        return span(async () => handleResourceTemplatesList(request, dependencies))
+        return wrap(async () => handleResourceTemplatesList(request, dependencies))
       case 'prompts/list':
-        return span(async () => handlePromptsList(request, dependencies))
+        return wrap(async () => handlePromptsList(request, dependencies))
       case 'tools/call':
-        return await handleToolsCall(request, sessionId, dependencies)
+        return wrap(() => handleToolsCall(request, sessionId, dependencies))
       case 'resources/read':
-        return await handleResourcesRead(request, sessionId, dependencies)
+        return wrap(() => handleResourcesRead(request, sessionId, dependencies))
       case 'resources/subscribe':
-        return await handleResourcesSubscribe(request, sessionId, dependencies)
+        return wrap(() => handleResourcesSubscribe(request, sessionId, dependencies))
       case 'resources/unsubscribe':
-        return await handleResourcesUnsubscribe(request, sessionId, dependencies)
+        return wrap(() => handleResourcesUnsubscribe(request, sessionId, dependencies))
       case 'prompts/get':
-        return await handlePromptsGet(request, sessionId, dependencies)
+        return wrap(() => handlePromptsGet(request, sessionId, dependencies))
       default:
         return createError(request.id, METHOD_NOT_FOUND, `Method ${request.method} not found`)
     }

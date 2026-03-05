@@ -1,4 +1,4 @@
-import type { Tracer, SpanAttributes } from '@opentelemetry/api'
+import type { Tracer, SpanAttributes, SpanStatusCode as SpanStatusCodeType } from '@opentelemetry/api'
 
 /**
  * MCP semantic convention attribute keys from @opentelemetry/semantic-conventions/incubating.
@@ -9,8 +9,12 @@ export const MCP_ATTR = {
   SESSION_ID: 'mcp.session.id',
   PROTOCOL_VERSION: 'mcp.protocol.version',
   RESOURCE_URI: 'mcp.resource.uri',
-  TOOL_NAME: 'mcp.tool.name'
+  TOOL_NAME: 'mcp.tool.name',
+  PROMPT_NAME: 'mcp.prompt.name'
 } as const
+
+// SpanStatusCode cached after first withSpan call — not re-imported per invocation
+let _SpanStatusCode: typeof SpanStatusCodeType | undefined
 
 /**
  * Wraps `fn` in an active OTel span. If no tracer is provided, calls fn directly.
@@ -25,7 +29,11 @@ export async function withSpan<T> (
 ): Promise<T> {
   if (!tracer) return fn()
 
-  const { SpanStatusCode } = await import('@opentelemetry/api')
+  if (!_SpanStatusCode) {
+    const otel = await import('@opentelemetry/api')
+    _SpanStatusCode = otel.SpanStatusCode
+  }
+  const SpanStatusCode = _SpanStatusCode
 
   return tracer.startActiveSpan(spanName, { attributes }, async (span) => {
     try {
@@ -50,10 +58,9 @@ export function buildSpanAttributes (
   sessionId?: string,
   extra?: Record<string, string>
 ): SpanAttributes {
-  const attrs: SpanAttributes = {
-    [MCP_ATTR.METHOD_NAME]: methodName
+  return {
+    [MCP_ATTR.METHOD_NAME]: methodName,
+    ...(sessionId ? { [MCP_ATTR.SESSION_ID]: sessionId } : {}),
+    ...extra
   }
-  if (sessionId) attrs[MCP_ATTR.SESSION_ID] = sessionId
-  if (extra) Object.assign(attrs, extra)
-  return attrs
 }
