@@ -2079,7 +2079,7 @@ This produces child spans for every MCP operation under the existing HTTP reques
 |---|---|---|
 | `tools/call` | `tools/call` | `mcp.method.name`, `mcp.tool.name`, `mcp.session.id` |
 | `resources/read` | `resources/read` | `mcp.method.name`, `mcp.resource.uri`, `mcp.session.id` |
-| `prompts/get` | `prompts/get` | `mcp.method.name`, `mcp.session.id` |
+| `prompts/get` | `prompts/get` | `mcp.method.name`, `mcp.prompt.name`, `mcp.session.id` |
 | `initialize` | `initialize` | `mcp.method.name`, `mcp.session.id` |
 | `tools/list` | `tools/list` | `mcp.method.name`, `mcp.session.id` |
 | `resources/list` | `resources/list` | `mcp.method.name`, `mcp.session.id` |
@@ -2087,7 +2087,7 @@ This produces child spans for every MCP operation under the existing HTTP reques
 
 Attribute names follow the [MCP semantic conventions](https://opentelemetry.io/docs/specs/semconv/registry/attributes/mcp/).
 
-`@opentelemetry/api` is an **optional** peer dependency — consumers who don't configure `telemetry` pay zero runtime cost (the module is never loaded).
+`@opentelemetry/api` is an **optional** peer dependency — if you don't configure `telemetry`, the OpenTelemetry API package itself is never imported, so you pay no runtime cost for that dependency.
 
 The package also exports the attribute constants and helper for advanced use:
 

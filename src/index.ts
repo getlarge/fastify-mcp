@@ -198,6 +198,7 @@ export type { StdioTransportOptions } from './stdio.ts'
 // Export plugin types
 export type {
   MCPPluginOptions,
+  TracerLike,
   MCPTool,
   MCPResource,
   MCPPrompt,
