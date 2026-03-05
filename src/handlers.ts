@@ -604,19 +604,27 @@ export async function handleRequest (
   }, `JSON-RPC method invoked: ${request.method}`)
 
   try {
+    const { tracer } = dependencies
+    const span = tracer
+      ? async (fn: () => Promise<JSONRPCResponse | JSONRPCError>) => {
+        const { withSpan, buildSpanAttributes } = await getTelemetry()
+        return withSpan(tracer, request.method, buildSpanAttributes(request.method, sessionId), fn)
+      }
+      : (fn: () => Promise<JSONRPCResponse | JSONRPCError>) => fn()
+
     switch (request.method) {
       case 'initialize':
-        return handleInitialize(request, dependencies)
+        return span(async () => handleInitialize(request, dependencies))
       case 'ping':
-        return handlePing(request)
+        return span(async () => handlePing(request))
       case 'tools/list':
-        return handleToolsList(request, dependencies)
+        return span(async () => handleToolsList(request, dependencies))
       case 'resources/list':
-        return handleResourcesList(request, dependencies)
+        return span(async () => handleResourcesList(request, dependencies))
       case 'resources/templates/list':
-        return handleResourceTemplatesList(request, dependencies)
+        return span(async () => handleResourceTemplatesList(request, dependencies))
       case 'prompts/list':
-        return handlePromptsList(request, dependencies)
+        return span(async () => handlePromptsList(request, dependencies))
       case 'tools/call':
         return await handleToolsCall(request, sessionId, dependencies)
       case 'resources/read':
