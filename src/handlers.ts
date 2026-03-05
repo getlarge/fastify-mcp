@@ -30,6 +30,13 @@ import type { AuthorizationContext } from './types/auth-types.ts'
 import { validate, CallToolRequestSchema, ReadResourceRequestSchema, GetPromptRequestSchema, isTypeBoxSchema } from './validation/index.ts'
 import { sanitizeToolParams, assessToolSecurity, SECURITY_WARNINGS } from './security.ts'
 
+// Lazy-loaded telemetry module — only imported when a tracer is configured
+let _telemetry: typeof import('./telemetry.ts') | undefined
+async function getTelemetry () {
+  if (!_telemetry) _telemetry = await import('./telemetry.ts')
+  return _telemetry
+}
+
 export type HandlerDependencies = {
   app: FastifyInstance
   opts: MCPPluginOptions
@@ -137,6 +144,22 @@ function handlePromptsList (request: JSONRPCRequest, dependencies: HandlerDepend
 }
 
 async function handleToolsCall (
+  request: JSONRPCRequest,
+  sessionId: string | undefined,
+  dependencies: HandlerDependencies
+): Promise<JSONRPCResponse | JSONRPCError> {
+  const { tracer } = dependencies
+
+  if (tracer) {
+    const { withSpan, buildSpanAttributes, MCP_ATTR } = await getTelemetry()
+    const toolName = (request.params as any)?.name as string | undefined
+    const attrs = await buildSpanAttributes('tools/call', sessionId, toolName ? { [MCP_ATTR.TOOL_NAME]: toolName } : undefined)
+    return withSpan(tracer, 'tools/call', attrs, () => handleToolsCallCore(request, sessionId, dependencies))
+  }
+  return handleToolsCallCore(request, sessionId, dependencies)
+}
+
+async function handleToolsCallCore (
   request: JSONRPCRequest,
   sessionId: string | undefined,
   dependencies: HandlerDependencies
@@ -272,6 +295,22 @@ async function handleResourcesRead (
   sessionId: string | undefined,
   dependencies: HandlerDependencies
 ): Promise<JSONRPCResponse | JSONRPCError> {
+  const { tracer } = dependencies
+
+  if (tracer) {
+    const { withSpan, buildSpanAttributes, MCP_ATTR } = await getTelemetry()
+    const uri = (request.params as any)?.uri as string | undefined
+    const attrs = await buildSpanAttributes('resources/read', sessionId, uri ? { [MCP_ATTR.RESOURCE_URI]: uri } : undefined)
+    return withSpan(tracer, 'resources/read', attrs, () => handleResourcesReadCore(request, sessionId, dependencies))
+  }
+  return handleResourcesReadCore(request, sessionId, dependencies)
+}
+
+async function handleResourcesReadCore (
+  request: JSONRPCRequest,
+  sessionId: string | undefined,
+  dependencies: HandlerDependencies
+): Promise<JSONRPCResponse | JSONRPCError> {
   const { resources } = dependencies
 
   // Validate the request parameters structure
@@ -353,6 +392,21 @@ async function handleResourcesRead (
 }
 
 async function handlePromptsGet (
+  request: JSONRPCRequest,
+  sessionId: string | undefined,
+  dependencies: HandlerDependencies
+): Promise<JSONRPCResponse | JSONRPCError> {
+  const { tracer } = dependencies
+
+  if (tracer) {
+    const { withSpan, buildSpanAttributes } = await getTelemetry()
+    const attrs = await buildSpanAttributes('prompts/get', sessionId)
+    return withSpan(tracer, 'prompts/get', attrs, () => handlePromptsGetCore(request, sessionId, dependencies))
+  }
+  return handlePromptsGetCore(request, sessionId, dependencies)
+}
+
+async function handlePromptsGetCore (
   request: JSONRPCRequest,
   sessionId: string | undefined,
   dependencies: HandlerDependencies
