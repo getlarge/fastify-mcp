@@ -29,6 +29,7 @@ import type { MCPTool, MCPResource, MCPPrompt, MCPPluginOptions, ResourceHandler
 import type { AuthorizationContext } from './types/auth-types.ts'
 import { validate, CallToolRequestSchema, ReadResourceRequestSchema, GetPromptRequestSchema, isTypeBoxSchema } from './validation/index.ts'
 import { sanitizeToolParams, assessToolSecurity, SECURITY_WARNINGS } from './security.ts'
+import { MCP_ATTR } from './telemetry.ts'
 
 // Lazy-loaded telemetry module — only imported when a tracer is configured
 let _telemetry: typeof import('./telemetry.ts') | undefined
@@ -36,11 +37,6 @@ async function getTelemetry () {
   if (!_telemetry) _telemetry = await import('./telemetry.ts')
   return _telemetry
 }
-
-// Attribute key constants — avoids repeating strings at call sites
-const MCP_ATTR_TOOL_NAME = 'mcp.tool.name'
-const MCP_ATTR_RESOURCE_URI = 'mcp.resource.uri'
-const MCP_ATTR_PROMPT_NAME = 'mcp.prompt.name'
 
 export type HandlerDependencies = {
   app: FastifyInstance
@@ -567,9 +563,9 @@ export async function handleRequest (
     // Build method-specific extra span attributes before dispatching
     const extraAttrs: Record<string, string> = {}
     const params = request.params as any
-    if (request.method === 'tools/call' && params?.name) extraAttrs[MCP_ATTR_TOOL_NAME] = params.name
-    if (request.method === 'resources/read' && params?.uri) extraAttrs[MCP_ATTR_RESOURCE_URI] = params.uri
-    if (request.method === 'prompts/get' && params?.name) extraAttrs[MCP_ATTR_PROMPT_NAME] = params.name
+    if (request.method === 'tools/call' && params?.name) extraAttrs[MCP_ATTR.TOOL_NAME] = params.name
+    if (request.method === 'resources/read' && params?.uri) extraAttrs[MCP_ATTR.RESOURCE_URI] = params.uri
+    if (request.method === 'prompts/get' && params?.name) extraAttrs[MCP_ATTR.PROMPT_NAME] = params.name
 
     const wrap = tracer
       ? async (fn: () => Promise<JSONRPCResponse | JSONRPCError>) => {
