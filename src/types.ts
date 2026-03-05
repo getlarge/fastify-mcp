@@ -1,4 +1,5 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
+import type { Tracer } from '@opentelemetry/api'
 import type {
   JSONRPCMessage,
   JSONRPCNotification,
@@ -166,6 +167,14 @@ export interface MCPPluginOptions {
     db?: number
   }
   authorization?: AuthorizationConfig
+  /**
+   * Optional OpenTelemetry instrumentation.
+   * Provide a Tracer to enable per-operation spans with MCP semantic convention attributes.
+   * @opentelemetry/api must be installed as a peer dependency.
+   */
+  telemetry?: {
+    tracer: Tracer
+  }
 }
 
 export interface SSESession {
