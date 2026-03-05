@@ -182,6 +182,10 @@ const mcpPlugin = fp(
 export default mcpPlugin
 export { mcpPlugin }
 
+// Export telemetry utilities
+export { MCP_ATTR, withSpan, buildSpanAttributes } from './telemetry.ts'
+export type { HandlerDependencies } from './handlers.ts'
+
 // Export stdio transport functionality
 export {
   StdioTransport,
