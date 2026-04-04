@@ -385,7 +385,7 @@ fastify.mcpAddTool({
         }
       }
       fastify.mcpSendToSession(sessionId, notification)
-      fastify.log.error(`Watch error for ${watchId}:`, error)
+      fastify.log.error({ err: error }, `Watch error for ${watchId}`)
 
       // Clean up failed watcher and its timers
       const watcherData = activeWatchers.get(watchId)

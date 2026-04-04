@@ -610,7 +610,7 @@ export function handleNotification (notification: JSONRPCNotification, app: Fast
       app.log.info('MCP client initialized')
       break
     case 'notifications/cancelled':
-      app.log.info('Request cancelled', notification.params)
+      app.log.info({ params: notification.params }, 'Request cancelled')
       break
     default:
       app.log.warn(`Unknown notification: ${notification.method}`)
