@@ -231,11 +231,11 @@ const authRoutesPlugin: FastifyPluginAsync<AuthRoutesOptions> = async (fastify: 
 
         const refreshInfo = tokens.refresh_token
           ? createTokenRefreshInfo(
-              tokens.refresh_token,
-              authContext.clientId || '',
-              authContext.authorizationServer || '',
-              authContext.scopes || []
-            )
+            tokens.refresh_token,
+            authContext.clientId || '',
+            authContext.authorizationServer || '',
+            authContext.scopes || []
+          )
           : undefined
 
         await sessionStore.updateAuthorization(state, authContext, refreshInfo)
