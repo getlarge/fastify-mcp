@@ -1,7 +1,7 @@
 import { describe, it, beforeEach, afterEach } from 'node:test'
 import * as assert from 'node:assert'
 import Fastify from 'fastify'
-import { Type, type Static } from '@sinclair/typebox'
+import { Type, type Static } from 'typebox'
 import mcpPlugin from '../src/index.ts'
 import type { HandlerContext } from '../src/types.ts'
 import { createTestJWT, setupMockAgent, generateMockJWKSResponse } from './auth-test-utils.ts'

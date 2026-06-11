@@ -1,7 +1,7 @@
 import Fastify from 'fastify'
 import { promises as fs, watch } from 'fs'
 import { join, relative } from 'path'
-import { Type } from '@sinclair/typebox'
+import { Type } from 'typebox'
 import mcpPlugin from '../src/index.ts'
 
 const fastify = Fastify({

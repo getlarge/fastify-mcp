@@ -13,7 +13,7 @@ import type {
   ElicitRequest,
   RequestId
 } from './schema.ts'
-import type { Static, TSchema, TObject, TString } from '@sinclair/typebox'
+import type { Static, TSchema, TObject, TString } from 'typebox'
 import type { AuthorizationConfig, AuthorizationContext } from './types/auth-types.ts'
 
 // Context interface for all handler types

@@ -1,5 +1,5 @@
 import Fastify from 'fastify'
-import { Type } from '@sinclair/typebox'
+import { Type } from 'typebox'
 import mcpPlugin from '../src/index.ts'
 // Load environment variables from .env file using Node.js built-in support
 import { readFileSync } from 'fs'
