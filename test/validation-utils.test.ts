@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test'
 import { strict as assert } from 'node:assert'
-import { Type } from '@sinclair/typebox'
+import { Type } from 'typebox'
 import {
   validate,
   validateOrThrow,
@@ -225,7 +225,10 @@ describe('Validation Utils', () => {
       assert.ok(schema.properties.age)
       assert.strictEqual(schema.properties.name.type, 'string')
       assert.strictEqual(schema.properties.age.type, 'number')
-      assert.strictEqual(schema.properties.age.minimum, 0)
+      assert.strictEqual(
+        (schema.properties.age as { minimum?: number }).minimum,
+        0
+      )
     })
 
     test('should validate tool schema structure', () => {

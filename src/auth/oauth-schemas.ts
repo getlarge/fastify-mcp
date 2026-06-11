@@ -1,5 +1,5 @@
-import { Type } from '@sinclair/typebox'
-import { Value } from '@sinclair/typebox/value'
+import { Type } from 'typebox'
+import { Value } from 'typebox/value'
 
 // OAuth 2.0 Token Response Schema (RFC 6749 Section 5.1)
 export const TokenResponseSchema = Type.Object({

@@ -1,4 +1,15 @@
-import type { TObject, TSchema, TUnion, TArray, TLiteral } from '@sinclair/typebox'
+import type { TObject, TSchema, TUnion, TArray, TLiteral } from 'typebox'
+
+type SchemaView = TSchema & {
+  type?: string
+  description?: string
+  const?: unknown
+  anyOf?: TSchema[]
+  enum?: string[]
+  minItems?: number
+  maxItems?: number
+  uniqueItems?: boolean
+}
 import type { PromptArgument } from './schemas.ts'
 import { isTypeBoxSchema } from './validator.ts'
 
@@ -20,24 +31,26 @@ export function schemaToArguments (schema: TObject): PromptArgument[] {
  * Extract description from a TypeBox schema
  */
 function getSchemaDescription (schema: TSchema): string {
+  const view = schema as SchemaView
+
   // Check for explicit description
-  if ('description' in schema && typeof schema.description === 'string') {
-    return schema.description
+  if (typeof view.description === 'string') {
+    return view.description
   }
 
   // Generate description based on schema type
   // Check for literal first (has const property)
-  if ('const' in schema) {
+  if ('const' in view) {
     return `Literal value: ${(schema as TLiteral).const}`
   }
 
   // Check for union (has anyOf property)
-  if ('anyOf' in schema && Array.isArray(schema.anyOf)) {
+  if (Array.isArray(view.anyOf)) {
     return generateUnionDescription(schema as TUnion)
   }
 
   // Use standard JSON Schema type property
-  switch (schema.type) {
+  switch (view.type) {
     case 'string':
       return generateStringDescription(schema as any)
     case 'number':
@@ -51,7 +64,7 @@ function getSchemaDescription (schema: TSchema): string {
     case 'object':
       return 'Object value'
     default:
-      return `Parameter of type ${schema.type || 'unknown'}`
+      return `Parameter of type ${view.type || 'unknown'}`
   }
 }
 
@@ -150,17 +163,18 @@ function generateIntegerDescription (schema: any): string {
  * Generate description for array schema
  */
 function generateArrayDescription (schema: TArray): string {
+  const view = schema as SchemaView
   const itemType = getSchemaDescription(schema.items)
   const parts = [`Array of ${itemType}`]
 
   const constraints = []
-  if (schema.minItems !== undefined) {
-    constraints.push(`min items: ${schema.minItems}`)
+  if (view.minItems !== undefined) {
+    constraints.push(`min items: ${view.minItems}`)
   }
-  if (schema.maxItems !== undefined) {
-    constraints.push(`max items: ${schema.maxItems}`)
+  if (view.maxItems !== undefined) {
+    constraints.push(`max items: ${view.maxItems}`)
   }
-  if (schema.uniqueItems) {
+  if (view.uniqueItems) {
     constraints.push('unique items')
   }
 
@@ -262,21 +276,22 @@ export function validateToolSchema (schema: any): string[] {
  */
 function validatePropertySchema (name: string, schema: TSchema): string[] {
   const errors: string[] = []
+  const view = schema as SchemaView
 
   // Check for unsupported types
-  const unsupportedTypes = ['Function', 'Symbol', 'Undefined', 'Null', 'Void']
-  if (schema.type && unsupportedTypes.includes(schema.type)) {
-    errors.push(`Property '${name}' uses unsupported type: ${schema.type}`)
+  const unsupportedTypes = ['function', 'symbol', 'undefined', 'null', 'void', 'Function', 'Symbol', 'Undefined', 'Null', 'Void']
+  if (view.type && unsupportedTypes.includes(view.type)) {
+    errors.push(`Property '${name}' uses unsupported type: ${view.type}`)
   }
 
   // Validate nested objects
-  if (schema.type === 'object') {
+  if (view.type === 'object') {
     const nestedErrors = validateToolSchema(schema)
     errors.push(...nestedErrors.map(err => `${name}.${err}`))
   }
 
   // Validate arrays
-  if (schema.type === 'array') {
+  if (view.type === 'array') {
     const arraySchema = schema as TArray
     const itemErrors = validatePropertySchema(`${name}[]`, arraySchema.items)
     errors.push(...itemErrors)

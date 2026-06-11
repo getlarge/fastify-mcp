@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify'
 import fp from 'fastify-plugin'
-import { Type } from '@sinclair/typebox'
+import { Type } from 'typebox'
 import type { PKCEChallenge } from '../auth/oauth-client.ts'
 import type { TokenValidator } from '../auth/token-validator.ts'
 import { createAuthorizationContext, createTokenRefreshInfo } from '../auth/token-utils.ts'
