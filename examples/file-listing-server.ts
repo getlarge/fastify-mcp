@@ -1,7 +1,7 @@
 import Fastify from 'fastify'
 import { promises as fs, watch } from 'fs'
 import { join, relative } from 'path'
-import { Type } from '@sinclair/typebox'
+import { Type } from 'typebox'
 import mcpPlugin from '../src/index.ts'
 
 const fastify = Fastify({
@@ -385,7 +385,7 @@ fastify.mcpAddTool({
         }
       }
       fastify.mcpSendToSession(sessionId, notification)
-      fastify.log.error(`Watch error for ${watchId}:`, error)
+      fastify.log.error({ err: error }, `Watch error for ${watchId}`)
 
       // Clean up failed watcher and its timers
       const watcherData = activeWatchers.get(watchId)

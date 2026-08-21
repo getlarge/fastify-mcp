@@ -24,12 +24,20 @@ import {
   INVALID_PARAMS
 } from './schema.ts'
 
-import type { MCPTool, MCPResource, MCPPrompt, MCPPluginOptions, ResourceHandlers } from './types.ts'
+import type { MCPTool, MCPResource, MCPPrompt, MCPPluginOptions, ResourceHandlers, TracerLike } from './types.ts'
 import type { AuthorizationContext } from './types/auth-types.ts'
 import { validate, CallToolRequestSchema, ReadResourceRequestSchema, GetPromptRequestSchema, isTypeBoxSchema } from './validation/index.ts'
 import { sanitizeToolParams, assessToolSecurity, SECURITY_WARNINGS } from './security.ts'
+import { MCP_ATTR } from './telemetry-constants.ts'
 
-type HandlerDependencies = {
+// Lazy-loaded telemetry module — only imported when a tracer is configured
+let _telemetry: typeof import('./telemetry.ts') | undefined
+async function getTelemetry () {
+  if (!_telemetry) _telemetry = await import('./telemetry.ts')
+  return _telemetry
+}
+
+export type HandlerDependencies = {
   app: FastifyInstance
   opts: MCPPluginOptions
   capabilities: any
@@ -41,6 +49,7 @@ type HandlerDependencies = {
   request: FastifyRequest
   reply: FastifyReply
   authContext?: AuthorizationContext
+  tracer?: TracerLike
 }
 
 export function createResponse (id: string | number, result: any): JSONRPCResponse {
@@ -548,29 +557,45 @@ export async function handleRequest (
   }, `JSON-RPC method invoked: ${request.method}`)
 
   try {
+    const { tracer } = dependencies
+
+    // Build method-specific extra span attributes before dispatching
+    const extraAttrs: Record<string, string> = {}
+    const params = request.params as any
+    if (request.method === 'tools/call' && params?.name) extraAttrs[MCP_ATTR.TOOL_NAME] = params.name
+    if (request.method === 'resources/read' && params?.uri) extraAttrs[MCP_ATTR.RESOURCE_URI] = params.uri
+    if (request.method === 'prompts/get' && params?.name) extraAttrs[MCP_ATTR.PROMPT_NAME] = params.name
+
+    const wrap = tracer
+      ? async (fn: () => Promise<JSONRPCResponse | JSONRPCError>) => {
+        const { withSpan, buildSpanAttributes } = await getTelemetry()
+        return withSpan(tracer, request.method, buildSpanAttributes(request.method, sessionId, extraAttrs), fn)
+      }
+      : async (fn: () => Promise<JSONRPCResponse | JSONRPCError>) => fn()
+
     switch (request.method) {
       case 'initialize':
-        return handleInitialize(request, dependencies)
+        return wrap(async () => handleInitialize(request, dependencies))
       case 'ping':
-        return handlePing(request)
+        return wrap(async () => handlePing(request))
       case 'tools/list':
-        return handleToolsList(request, dependencies)
+        return wrap(async () => handleToolsList(request, dependencies))
       case 'resources/list':
-        return handleResourcesList(request, dependencies)
+        return wrap(async () => handleResourcesList(request, dependencies))
       case 'resources/templates/list':
-        return handleResourceTemplatesList(request, dependencies)
+        return wrap(async () => handleResourceTemplatesList(request, dependencies))
       case 'prompts/list':
-        return handlePromptsList(request, dependencies)
+        return wrap(async () => handlePromptsList(request, dependencies))
       case 'tools/call':
-        return await handleToolsCall(request, sessionId, dependencies)
+        return wrap(() => handleToolsCall(request, sessionId, dependencies))
       case 'resources/read':
-        return await handleResourcesRead(request, sessionId, dependencies)
+        return wrap(() => handleResourcesRead(request, sessionId, dependencies))
       case 'resources/subscribe':
-        return await handleResourcesSubscribe(request, sessionId, dependencies)
+        return wrap(() => handleResourcesSubscribe(request, sessionId, dependencies))
       case 'resources/unsubscribe':
-        return await handleResourcesUnsubscribe(request, sessionId, dependencies)
+        return wrap(() => handleResourcesUnsubscribe(request, sessionId, dependencies))
       case 'prompts/get':
-        return await handlePromptsGet(request, sessionId, dependencies)
+        return wrap(() => handlePromptsGet(request, sessionId, dependencies))
       default:
         return createError(request.id, METHOD_NOT_FOUND, `Method ${request.method} not found`)
     }
@@ -585,7 +610,7 @@ export function handleNotification (notification: JSONRPCNotification, app: Fast
       app.log.info('MCP client initialized')
       break
     case 'notifications/cancelled':
-      app.log.info('Request cancelled', notification.params)
+      app.log.info({ params: notification.params }, 'Request cancelled')
       break
     default:
       app.log.warn(`Unknown notification: ${notification.method}`)

@@ -13,7 +13,7 @@ import type {
   ElicitRequest,
   RequestId
 } from './schema.ts'
-import type { Static, TSchema, TObject, TString } from '@sinclair/typebox'
+import type { Static, TSchema, TObject, TString } from 'typebox'
 import type { AuthorizationConfig, AuthorizationContext } from './types/auth-types.ts'
 
 // Context interface for all handler types
@@ -152,6 +152,17 @@ export interface UnsafeMCPPrompt {
   handler?: UnsafePromptHandler
 }
 
+/**
+ * Minimal tracer interface compatible with `@opentelemetry/api`'s `Tracer`.
+ * Defined locally so consumers don't need `@opentelemetry/api` installed just
+ * to import this package's types. Any real OTel `Tracer` satisfies this structurally.
+ *
+ * @see https://open-telemetry.github.io/opentelemetry-js/interfaces/_opentelemetry_api.Tracer.html
+ */
+export interface TracerLike {
+  startActiveSpan (name: string, options: any, fn: (span: any) => any): any
+}
+
 export interface MCPPluginOptions {
   serverInfo?: Implementation
   capabilities?: ServerCapabilities
@@ -164,8 +175,18 @@ export interface MCPPluginOptions {
     port: number
     password?: string
     db?: number
+    tls?: Record<string, unknown>
   }
   authorization?: AuthorizationConfig
+  /**
+   * Optional OpenTelemetry instrumentation.
+   * Provide a Tracer to enable per-operation spans with MCP semantic convention attributes.
+   * Any `Tracer` from `@opentelemetry/api` satisfies `TracerLike`.
+   * @opentelemetry/api must be installed as a peer dependency when using this option.
+   */
+  telemetry?: {
+    tracer: TracerLike
+  }
 }
 
 export interface SSESession {
