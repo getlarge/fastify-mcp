@@ -1,4 +1,5 @@
-import type { FastifyReply, FastifyRequest } from 'fastify'
+import type { FastifyReply, FastifyRequest, FastifySchema, HTTPMethods } from 'fastify'
+import type { Options } from 'ajv'
 import type {
   JSONRPCMessage,
   JSONRPCNotification,
@@ -10,11 +11,12 @@ import type {
   Tool,
   Resource,
   Prompt,
-  ElicitRequest,
+  ElicitRequestFormParams,
   RequestId
 } from './schema.ts'
 import type { Static, TSchema, TObject, TString } from 'typebox'
 import type { AuthorizationConfig, AuthorizationContext } from './types/auth-types.ts'
+import type { AllowedOrigins } from './security.ts'
 
 // Context interface for all handler types
 export interface HandlerContext {
@@ -93,6 +95,14 @@ declare module 'fastify' {
       handler?: UnsafeToolHandler
     ): void
 
+    mcpCallTool(
+      name: string,
+      args: Record<string, unknown>,
+      context: McpCallToolContext
+    ): Promise<McpCallToolOutcome>
+    mcpHasTool(name: string): boolean
+    mcpListToolNames(): readonly string[]
+
     mcpAddResource<TUriSchema extends TSchema = TString>(
       definition: Omit<Resource, 'uri'> & {
         uriPattern: string,
@@ -121,8 +131,27 @@ declare module 'fastify' {
     mcpElicit: (
       sessionId: string,
       message: string,
-      requestedSchema: ElicitRequest['params']['requestedSchema'],
+      requestedSchema: ElicitRequestFormParams['requestedSchema'],
       requestId?: RequestId
+    ) => Promise<boolean>
+
+    /**
+     * Send a URL mode elicitation request. Resolves to the elicitation id on
+     * success (use it to correlate the later completion notification), or null
+     * if the request could not be sent.
+     */
+    mcpElicitUrl: (
+      sessionId: string,
+      message: string,
+      url: string,
+      elicitationId?: string,
+      requestId?: RequestId
+    ) => Promise<string | null>
+
+    /** Signal that an out-of-band URL elicitation has completed */
+    mcpNotifyElicitationComplete: (
+      sessionId: string,
+      elicitationId: string
     ) => Promise<boolean>
 
     // Resource subscription handler setters
@@ -161,13 +190,155 @@ export interface UnsafeMCPPrompt {
  */
 export interface TracerLike {
   startActiveSpan (name: string, options: any, fn: (span: any) => any): any
+  startActiveSpan (name: string, options: any, context: any, fn: (span: any) => any): any
 }
+
+/**
+ * Which operation `canAccessTool` is deciding: `list` for `tools/list`
+ * visibility, `call` for `tools/call` execution (including HTTP,
+ * task-augmented, and `mcpCallTool()` calls, and calls to unknown tools).
+ */
+export type ToolAccessOperation = 'list' | 'call'
+
+/** Per-request context handed to the `canAccessTool` hook. */
+export interface ToolAccessContext {
+  authContext?: AuthorizationContext
+  request: FastifyRequest
+  sessionId?: string
+  operation: ToolAccessOperation
+}
+
+export type MCPRouteId =
+  | 'mcp.post'
+  | 'mcp.get'
+  | 'mcp.delete'
+
+export interface MCPRouteSchemaContext {
+  routeId: MCPRouteId
+  method: HTTPMethods
+  url: string
+}
+
+export type MCPRouteSchemaTransformer = (
+  schema: FastifySchema,
+  context: MCPRouteSchemaContext
+) => FastifySchema
+
+export interface McpCallToolContext {
+  request: FastifyRequest
+  reply: FastifyReply
+  authContext?: AuthorizationContext
+}
+
+export type McpCallToolOutcome =
+  | { ok: true, result: CallToolResult }
+  | { ok: false, reason: 'not-found' }
+  | { ok: false, reason: 'access-denied' }
+  | { ok: false, reason: 'invalid-arguments', detail: string }
+  | { ok: false, reason: 'task-required' }
+
+interface MCPToolCallCompleteEventBase {
+  toolName: string
+  arguments: Record<string, unknown>
+  authContext?: AuthorizationContext
+  sessionId?: string
+  /** Correlates this event back to the originating request, for every source */
+  requestId: string
+  durationMs: number
+  outcome: McpCallToolOutcome
+}
+
+/**
+ * `source: 'task'` fires after the original HTTP response may already have
+ * completed, so it must not carry the (possibly finished) `request`/`reply`
+ * objects that the synchronous sources expose.
+ */
+export type MCPToolCallCompleteEvent =
+  | (MCPToolCallCompleteEventBase & {
+    source: 'json-rpc' | 'in-process'
+    request: FastifyRequest
+    reply: FastifyReply
+  })
+  | (MCPToolCallCompleteEventBase & {
+    source: 'task'
+    request?: undefined
+    reply?: undefined
+  })
 
 export interface MCPPluginOptions {
   serverInfo?: Implementation
   capabilities?: ServerCapabilities
   instructions?: string
   enableSSE?: boolean
+  /**
+   * Close an SSE stream after this many milliseconds so the client falls back to
+   * polling and reconnects with `Last-Event-ID` (SEP-1699). Omit to keep streams
+   * open indefinitely, which stays valid.
+   */
+  sseMaxConnectionMs?: number
+  /**
+   * Enable task-augmented execution (2025-11-25, experimental). Tools opt in
+   * individually via `execution.taskSupport`.
+   */
+  enableTasks?: boolean
+  /**
+   * Retention for a task whose creator did not request a `ttl`, in milliseconds
+   * (default 60000). Raise it when tools can run longer than a minute, so their
+   * tasks do not expire before completing.
+   */
+  taskDefaultTtlMs?: number
+  /**
+   * Ceiling on task retention, in milliseconds (default 3600000). A requested
+   * `ttl` above this is capped, so a client cannot pin resources indefinitely.
+   */
+  taskMaxTtlMs?: number
+  /**
+   * Origins accepted on the MCP endpoints, to prevent DNS rebinding attacks.
+   * Omit to disable validation (non-browser deployments), pass `'*'` or `true`
+   * to accept any origin, or list exact origins to allow.
+   */
+  allowedOrigins?: AllowedOrigins
+  /**
+   * Per-request tool authorization, keyed by tool name. Consulted by both
+   * `tools/list` (a denied tool is omitted) and `tools/call` (a denied tool
+   * answers with the same "not found" error as an unknown tool, so callers
+   * cannot probe for tools they are not allowed to see by response shape).
+   * `tools/call` runs the hook even for unknown names. Response timing is not
+   * guaranteed to be indistinguishable: it depends on what the hook itself
+   * does per name. A hook that throws denies access.
+   * `context.operation` tells the hook which decision it is making: `'list'`
+   * for `tools/list` visibility, `'call'` for execution (HTTP, task-augmented,
+   * and `mcpCallTool()` calls, and unknown tool names, all use `'call'`).
+   * Visibility and execution policies may intentionally differ.
+   * Omit to keep every registered tool visible and callable.
+   */
+  canAccessTool?: (
+    toolName: string,
+    context: ToolAccessContext
+  ) => boolean | Promise<boolean>
+  /**
+   * Fires once per tool call, after it settles, regardless of transport
+   * (JSON-RPC, `app.mcpCallTool()`, or a completed task). Not called for
+   * `tools/list`, initialization/ping, or malformed requests where no tool
+   * name was resolved. Awaited before the response is sent, so keep it fast;
+   * a throwing hook is logged and otherwise ignored, it never changes the
+   * tool response. `event.arguments` are the raw, unredacted tool
+   * arguments, so redact sensitive values yourself before logging them.
+   */
+  onToolCallComplete?: (
+    event: MCPToolCallCompleteEvent
+  ) => void | Promise<void>
+  /**
+   * Customize Fastify/OpenAPI schema metadata for MCP transport routes.
+   * This callback runs once per registered route during startup.
+   */
+  transformRouteSchema?: MCPRouteSchemaTransformer
+  /**
+   * Validate plain JSON Schema tool inputs using AJV.
+   * Omit this option to disable validation, or provide an object to enable it.
+   * Options override the default Fastify-compatible AJV configuration.
+   */
+  validateJsonSchemaInputs?: Options
   sessionStore?: 'memory' | 'redis'
   messageBroker?: 'memory' | 'redis'
   redis?: {
@@ -182,7 +353,7 @@ export interface MCPPluginOptions {
    * Optional OpenTelemetry instrumentation.
    * Provide a Tracer to enable per-operation spans with MCP semantic convention attributes.
    * Any `Tracer` from `@opentelemetry/api` satisfies `TracerLike`.
-   * @opentelemetry/api must be installed as a peer dependency when using this option.
+   * `@opentelemetry/api` must be installed as a peer dependency when using this option.
    */
   telemetry?: {
     tracer: TracerLike

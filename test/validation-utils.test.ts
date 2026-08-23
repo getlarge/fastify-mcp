@@ -6,6 +6,7 @@ import {
   validateOrThrow,
   check,
   transform,
+  isTypeBoxSchema,
   createValidationError,
   formatValidationErrors
 } from '../src/validation/validator.ts'
@@ -18,6 +19,15 @@ import {
 
 describe('Validation Utils', () => {
   describe('Validator Functions', () => {
+    test('should distinguish TypeBox schemas from plain JSON Schema', () => {
+      assert.strictEqual(isTypeBoxSchema(Type.Object({ name: Type.String() })), true)
+      assert.strictEqual(isTypeBoxSchema(Type.Unsafe({ type: 'object' })), true)
+      assert.strictEqual(isTypeBoxSchema({
+        type: 'object',
+        properties: { name: { type: 'string' } }
+      }), false)
+    })
+
     test('should validate data against TypeBox schema', () => {
       const schema = Type.Object({
         name: Type.String(),

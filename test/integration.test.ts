@@ -179,7 +179,7 @@ describe('MCP Integration Tests', () => {
       const errorContent = errorResult.content[0]
       t.assert.strictEqual(errorContent.type, 'text')
       if (errorContent.type === 'text') {
-        t.assert.ok(errorContent.text.includes('Invalid tool arguments'))
+        t.assert.ok(errorContent.text.includes('Invalid operation'))
       }
 
       // Test resources listing

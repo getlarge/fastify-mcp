@@ -15,6 +15,15 @@ export function isTypeBoxSchema (schema: any): boolean {
     return false
   }
 
+  // TypeBox 1.x can compile ordinary JSON Schema objects too, so successful
+  // compilation alone cannot distinguish schemas created by TypeBox from plain
+  // JSON Schema. Its builders attach one of these non-enumerable markers.
+  const isTypeBoxValue = Object.prototype.hasOwnProperty.call(schema, '~kind') ||
+    Object.prototype.hasOwnProperty.call(schema, '~unsafe')
+  if (!isTypeBoxValue) {
+    return false
+  }
+
   try {
     Compile(schema)
     return true
