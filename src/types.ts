@@ -14,7 +14,7 @@ import type {
   ElicitRequestFormParams,
   RequestId
 } from './schema.ts'
-import type { Static, TSchema, TObject, TString } from '@sinclair/typebox'
+import type { Static, TSchema, TObject, TString } from 'typebox'
 import type { AuthorizationConfig, AuthorizationContext } from './types/auth-types.ts'
 import type { AllowedOrigins } from './security.ts'
 

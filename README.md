@@ -2500,6 +2500,47 @@ This version introduces elicitation support and enhanced security features:
 3. Review security logs for any validation warnings
 4. Consider implementing rate limiting for production deployments
 
+## Telemetry
+
+The plugin supports optional OpenTelemetry instrumentation. Install `@opentelemetry/api` as a peer dependency, then pass a `Tracer` via the `telemetry` option:
+
+```typescript
+import { trace } from '@opentelemetry/api'
+
+await app.register(mcpPlugin, {
+  telemetry: {
+    tracer: trace.getTracer('my-mcp-server', '1.0.0'),
+  },
+  // ...other options
+})
+```
+
+This produces child spans for every MCP operation under the existing HTTP request span:
+
+| MCP method | Span name | Key attributes |
+|---|---|---|
+| `tools/call` | `tools/call` | `mcp.method.name`, `mcp.tool.name`, `mcp.session.id` |
+| `resources/read` | `resources/read` | `mcp.method.name`, `mcp.resource.uri`, `mcp.session.id` |
+| `prompts/get` | `prompts/get` | `mcp.method.name`, `mcp.prompt.name`, `mcp.session.id` |
+| `initialize` | `initialize` | `mcp.method.name`, `mcp.session.id` |
+| `tools/list` | `tools/list` | `mcp.method.name`, `mcp.session.id` |
+| `resources/list` | `resources/list` | `mcp.method.name`, `mcp.session.id` |
+| `prompts/list` | `prompts/list` | `mcp.method.name`, `mcp.session.id` |
+
+Attribute names follow the [MCP semantic conventions](https://opentelemetry.io/docs/specs/semconv/registry/attributes/mcp/).
+
+`@opentelemetry/api` is an **optional** peer dependency — if you don't configure `telemetry`, the OpenTelemetry API package itself is never imported, so you pay no runtime cost for that dependency.
+
+The package also exports the attribute constants and helper for advanced use:
+
+```typescript
+import { MCP_ATTR, withSpan, buildSpanAttributes } from '@getlarge/fastify-mcp'
+
+// MCP_ATTR.METHOD_NAME === 'mcp.method.name'
+// MCP_ATTR.TOOL_NAME   === 'mcp.tool.name'
+// etc.
+```
+
 ## License
 
 Apache 2.0

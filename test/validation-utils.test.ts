@@ -1,11 +1,12 @@
 import { test, describe } from 'node:test'
 import { strict as assert } from 'node:assert'
-import { Type } from '@sinclair/typebox'
+import { Type } from 'typebox'
 import {
   validate,
   validateOrThrow,
   check,
   transform,
+  isTypeBoxSchema,
   createValidationError,
   formatValidationErrors
 } from '../src/validation/validator.ts'
@@ -18,6 +19,15 @@ import {
 
 describe('Validation Utils', () => {
   describe('Validator Functions', () => {
+    test('should distinguish TypeBox schemas from plain JSON Schema', () => {
+      assert.strictEqual(isTypeBoxSchema(Type.Object({ name: Type.String() })), true)
+      assert.strictEqual(isTypeBoxSchema(Type.Unsafe({ type: 'object' })), true)
+      assert.strictEqual(isTypeBoxSchema({
+        type: 'object',
+        properties: { name: { type: 'string' } }
+      }), false)
+    })
+
     test('should validate data against TypeBox schema', () => {
       const schema = Type.Object({
         name: Type.String(),
@@ -225,7 +235,10 @@ describe('Validation Utils', () => {
       assert.ok(schema.properties.age)
       assert.strictEqual(schema.properties.name.type, 'string')
       assert.strictEqual(schema.properties.age.type, 'number')
-      assert.strictEqual(schema.properties.age.minimum, 0)
+      assert.strictEqual(
+        (schema.properties.age as { minimum?: number }).minimum,
+        0
+      )
     })
 
     test('should validate tool schema structure', () => {

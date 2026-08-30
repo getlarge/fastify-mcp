@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test'
 import { strict as assert } from 'node:assert'
 import Fastify from 'fastify'
-import { Type } from '@sinclair/typebox'
+import { Type } from 'typebox'
 import mcpPlugin from '../src/index.ts'
 import { JSONRPC_VERSION, INVALID_PARAMS } from '../src/schema.ts'
 import type { JSONRPCRequest, JSONRPCResultResponse, JSONRPCError, CallToolResult, GetPromptResult, ReadResourceResult } from '../src/schema.ts'

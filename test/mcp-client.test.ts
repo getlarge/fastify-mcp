@@ -2,7 +2,7 @@ import { describe, test } from 'node:test'
 import type { TestContext } from 'node:test'
 import assert from 'node:assert/strict'
 import Fastify, { type FastifyInstance } from 'fastify'
-import { Type } from '@sinclair/typebox'
+import { Type } from 'typebox'
 import mcpPlugin, { createMcpClient } from '../src/index.ts'
 import {
   JSONRPC_VERSION,

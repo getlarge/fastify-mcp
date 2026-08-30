@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test'
 import type { TestContext } from 'node:test'
 import Fastify from 'fastify'
-import { Type } from '@sinclair/typebox'
+import { Type } from 'typebox'
 import mcpPlugin from '../src/index.ts'
 import { JSONRPC_VERSION, METHOD_NOT_FOUND } from '../src/schema.ts'
 import {

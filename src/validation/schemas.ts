@@ -1,5 +1,5 @@
-import { Type } from '@sinclair/typebox'
-import type { Static } from '@sinclair/typebox'
+import { Type } from 'typebox'
+import type { Static } from 'typebox'
 
 // Core TypeBox schemas for MCP protocol validation
 

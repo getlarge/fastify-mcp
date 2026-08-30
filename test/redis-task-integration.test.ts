@@ -1,7 +1,7 @@
 import { describe } from 'node:test'
 import assert from 'node:assert'
 import fastify from 'fastify'
-import { Type } from '@sinclair/typebox'
+import { Type } from 'typebox'
 import mcpPlugin from '../src/index.ts'
 import { testWithRedis } from './redis-test-utils.ts'
 import { JSONRPC_VERSION, LATEST_PROTOCOL_VERSION } from '../src/schema.ts'

@@ -1,11 +1,11 @@
-import type { Static, TSchema, TObject } from '@sinclair/typebox'
-import { Value } from '@sinclair/typebox/value'
-import { TypeCompiler } from '@sinclair/typebox/compiler'
+import type { Static, TSchema, TObject } from 'typebox'
+import { Value } from 'typebox/value'
+import { Compile, type Validator } from 'typebox/compile'
 import stringify from 'safe-stable-stringify'
 import type { ValidationError } from './schemas.ts'
 
 // Compiled validator cache
-const compiledValidators = new Map<string, ReturnType<typeof TypeCompiler.Compile>>()
+const compiledValidators = new Map<string, Validator>()
 
 /**
  * Check if a schema is a valid TypeBox schema by attempting to compile it
@@ -15,8 +15,17 @@ export function isTypeBoxSchema (schema: any): boolean {
     return false
   }
 
+  // TypeBox 1.x can compile ordinary JSON Schema objects too, so successful
+  // compilation alone cannot distinguish schemas created by TypeBox from plain
+  // JSON Schema. Its builders attach one of these non-enumerable markers.
+  const isTypeBoxValue = Object.prototype.hasOwnProperty.call(schema, '~kind') ||
+    Object.prototype.hasOwnProperty.call(schema, '~unsafe')
+  if (!isTypeBoxValue) {
+    return false
+  }
+
   try {
-    TypeCompiler.Compile(schema)
+    Compile(schema)
     return true
   } catch {
     return false
@@ -26,10 +35,10 @@ export function isTypeBoxSchema (schema: any): boolean {
 /**
  * Get a compiled validator for a schema, with caching
  */
-function getValidator<T extends TSchema> (schema: T): ReturnType<typeof TypeCompiler.Compile> {
+function getValidator<T extends TSchema> (schema: T): Validator {
   const key = stringify(schema)
   if (!compiledValidators.has(key)) {
-    compiledValidators.set(key, TypeCompiler.Compile(schema))
+    compiledValidators.set(key, Compile(schema))
   }
   return compiledValidators.get(key)!
 }
@@ -63,10 +72,10 @@ export function validate<T extends TSchema> (
 
   // Collect validation errors
   const errors = Array.from(validator.Errors(data)).map(error => ({
-    path: error.path,
+    path: error.instancePath,
     message: error.message,
-    expected: error.schema?.type?.toString() || 'unknown',
-    received: error.value
+    expected: error.keyword,
+    received: data
   }))
 
   const validationError: ValidationError = {

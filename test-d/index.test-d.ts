@@ -4,7 +4,7 @@ import {
   expectAssignable,
   expectNotAssignable,
 } from 'tsd'
-import { Type } from '@sinclair/typebox'
+import { Type } from 'typebox'
 import type { FastifyInstance, FastifyReply, FastifyRequest, FastifySchema, HTTPMethods } from 'fastify'
 import { RedisMessageBroker, MemoryMessageBroker, RedisSessionStore, MemorySessionStore } from '../dist/index.js'
 import type {
